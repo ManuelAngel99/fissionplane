@@ -3,3 +3,4 @@ User-agent: *
 Allow: /
 
 Sitemap: https://fissionplane.dev/sitemap-index.xml
+Sitemap: https://fissionplane.dev/docs/sitemap.xml

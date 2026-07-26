@@ -22,8 +22,8 @@ jobs:
     outputs:
       sdks: ${{ steps.filter.outputs.sdks }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -44,11 +44,11 @@ jobs:
     if: needs.changes.outputs.sdks == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - run: pnpm --package=@redocly/cli@2 dlx redocly lint src/contracts/openapi.yaml src/contracts/dataplane.yaml
@@ -61,7 +61,7 @@ jobs:
     if: needs.changes.outputs.sdks == 'true' && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Extract the base branch's contract
@@ -75,10 +75,12 @@ jobs:
           fi
       - name: Fail on breaking changes
         if: steps.base.outputs.exists == 'true'
-        uses: oasdiff-action/breaking@v0.0.19
+        uses: oasdiff/oasdiff-action/breaking@v0
         with:
           base: /tmp/base-openapi.yaml
           revision: src/contracts/openapi.yaml
+          # Keep CI fail-only; don't upload specs or post review comments.
+          review: false
 
   # The contract is the source of truth: regenerate both SDK cores and
   # fail if the committed copies differ (control-plane.md: "CI fails if
@@ -89,17 +91,17 @@ jobs:
     if: needs.changes.outputs.sdks == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
           cache-dependency-path: src/pnpm-lock.yaml
-      - uses: astral-sh/setup-uv@v5
-      - uses: extractions/setup-just@v2
+      - uses: astral-sh/setup-uv@v9
+      - uses: extractions/setup-just@v4
       - name: Regenerate SDK cores
         run: just generate-sdks
       - name: Fail on drift
@@ -119,11 +121,11 @@ jobs:
       run:
         working-directory: src/sdks/typescript
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
@@ -148,8 +150,8 @@ jobs:
       run:
         working-directory: src/sdks/python
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9
         with:
           python-version: ${{ matrix.python-version }}
       - run: uv sync --locked

@@ -1,0 +1,93 @@
+---
+import Layout from "../layouts/Layout.astro";
+import SiteFooter from "./SiteFooter.astro";
+import SiteHeader from "./SiteHeader.astro";
+import { getDictionary, type Locale } from "../i18n";
+import "../styles/landing.css";
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = getDictionary(lang);
+---
+
+<Layout
+  title={t.privacy.metaTitle}
+  description={t.privacy.metaDescription}
+  lang={lang}
+  pagePath="/privacy"
+>
+  <div data-page="fissionplane">
+    <div data-component="container">
+      <SiteHeader lang={lang} t={t} />
+
+      <main data-component="content">
+        <section
+          data-component="privacy-intro"
+          aria-labelledby="privacy-heading"
+        >
+          <div data-slot="hero-copy">
+            <h1 id="privacy-heading">{t.privacy.heading}</h1>
+            <p>{t.privacy.subtitle}</p>
+          </div>
+        </section>
+
+        {
+          t.privacy.sections.map((section) => (
+            <section data-component="privacy-section">
+              <div data-slot="section-title">
+                <h2>{section.heading}</h2>
+                <p>{section.body}</p>
+              </div>
+            </section>
+          ))
+        }
+
+        <section
+          data-component="privacy-section"
+          aria-labelledby="privacy-choice-heading"
+        >
+          <div data-slot="section-title">
+            <h2 id="privacy-choice-heading">{t.privacy.choice.heading}</h2>
+            {/*
+              The live status is decided in the browser, so every locale ships
+              all four lines and the script picks one. The static text is the
+              first-visit state, which is also the truth without JavaScript:
+              nothing has been chosen and nothing is measured.
+            */}
+            <p
+              data-consent-status=""
+              data-status-allowed={t.privacy.choice.allowed}
+              data-status-declined={t.privacy.choice.declined}
+              data-status-undecided={t.privacy.choice.undecided}
+              data-status-signalled={t.privacy.choice.signalled}
+            >
+              {t.privacy.choice.undecided}
+            </p>
+          </div>
+          {/* Hidden without JavaScript, and when the browser already refuses. */}
+          <div data-slot="consent-controls">
+            <button
+              type="button"
+              data-consent-action="allow"
+              aria-pressed="false"
+            >
+              {t.privacy.choice.allow}
+            </button>
+            <button
+              type="button"
+              data-consent-action="decline"
+              aria-pressed="false"
+            >
+              {t.privacy.choice.decline}
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <SiteFooter lang={lang} t={t} pagePath="/privacy" />
+    </div>
+  </div>
+</Layout>

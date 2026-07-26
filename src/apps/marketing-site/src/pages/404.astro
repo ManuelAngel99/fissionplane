@@ -1,0 +1,22 @@
+---
+import Layout from "../layouts/Layout.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import { getDictionary } from "../i18n";
+import "../styles/landing.css";
+
+const t = getDictionary("en");
+---
+
+<Layout title={t.notFound.title} lang="en">
+  <div data-page="fissionplane">
+    <div data-component="container">
+      <SiteHeader lang="en" t={t} />
+      <section data-component="hero">
+        <div data-slot="hero-copy">
+          <h1>{t.notFound.heading}</h1>
+          <p>{t.notFound.body} <a href="/">{t.notFound.homeLink}</a></p>
+        </div>
+      </section>
+    </div>
+  </div>
+</Layout>

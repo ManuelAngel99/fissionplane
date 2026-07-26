@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+// The sealed contract between vm-host and vm-steward.
+//
+// Evolution rules (docs/components/vm-protocol.md, "Evolution rules"):
+//   - never change the meaning of an existing message;
+//   - never reuse a field number or a capability bit;
+//   - never tighten validation on an existing field;
+//   - enums always have an explicit zero UNSPECIFIED variant;
+//   - everything is additive: new messages, new fields with new numbers,
+//     new enum variants, new capability bits.
+//
+// A change that modifies a golden fixture is a change to the sealed
+// contract and requires a recorded justification.
+
+package fissionplane.vmproto.v1;
+
+// The single wire envelope. On the wire each frame is a big-endian u32
+// length prefix followed by this message.
+//
+// stream_id 0 is the reserved session stream. Host-allocated stream ids
+// start at 1, increase monotonically per connection, and are never
+// reused; a connection that exhausts the space is retired, never wrapped.
+message Frame {
+  uint64 stream_id = 1;
+
+  // Every frame carries the epoch it was issued under. A frame tagged
+  // with an epoch lower than the current one is rejected with
+  // STALE_EPOCH.
+  uint64 epoch = 2;
+
+  oneof body {
+    Hello hello = 3;
+    HelloAck hello_ack = 4;
+    Ping ping = 5;
+    Pong pong = 6;
+    Error error = 7;
+    // Operation messages are appended below this line only.
+  }
+}
+
+// host -> guest. The first exchange after connect, before any operation
+// is legal.
+message Hello {
+  // Generation of the wire format itself, not a feature level. A
+  // mismatch is fatal: there is no way to interpret the bytes.
+  uint32 protocol_version = 1;
+
+  // The epoch the host is assigning to this sandbox instance. Epochs are
+  // monotonic: a lower epoch than the current one is rejected and the
+  // connection closed; a higher one supersedes.
+  uint64 epoch = 2;
+
+  // Host-side limits. Effective limits are the minimum of the two sides.
+  uint32 max_frame_size = 3;
+  uint32 chunk_size = 4;
+}
+
+// guest -> host. The reply to Hello.
+message HelloAck {
+  uint32 protocol_version = 1;
+
+  // What this agent can do. Bits are permanent and never recycled. A
+  // call whose bit is clear fails with UNSUPPORTED naming the bit.
+  uint64 capabilities = 2;
+
+  // Identifies the exact agent build. Its only permitted behavioural use
+  // is the host-side quarantine list, which subtracts bits a build
+  // advertises. It is never compared as a version.
+  string build_id = 3;
+
+  // Agent-side limits. Effective limits are the minimum of the two sides.
+  uint32 max_frame_size = 4;
+  uint32 chunk_size = 5;
+}
+
+// Liveness and round-trip measurement on the session stream; also the
+// post-restore readiness probe.
+message Ping {
+  uint64 nonce = 1;
+}
+
+message Pong {
+  uint64 nonce = 1;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  // The operation's capability bit is clear. required_capability is set.
+  ERROR_CODE_UNSUPPORTED = 1;
+  // The frame's epoch is not the current one.
+  ERROR_CODE_STALE_EPOCH = 2;
+  // No such process, watch, or path.
+  ERROR_CODE_NOT_FOUND = 3;
+  // The guest kernel refused.
+  ERROR_CODE_PERMISSION = 4;
+  // Failed validation.
+  ERROR_CODE_INVALID_ARGUMENT = 5;
+  // A guest-side limit was reached.
+  ERROR_CODE_RESOURCE_EXHAUSTED = 6;
+  // Valid request, wrong state (e.g. spawn while the tenant cgroup is
+  // frozen, or waiting on an expired process record).
+  ERROR_CODE_FAILED_PRECONDITION = 7;
+  // An agent fault. Alerted on separately.
+  ERROR_CODE_INTERNAL = 8;
+}
+
+message Error {
+  ErrorCode code = 1;
+  // For logs and humans; may change freely. Callers branch on code only.
+  string message = 2;
+  // Present when code is UNSUPPORTED: the capability bit required.
+  optional uint64 required_capability = 3;
+}

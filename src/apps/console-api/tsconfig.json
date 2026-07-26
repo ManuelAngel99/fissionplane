@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@fissionplane/console-api": ["./src/index.ts"],
+      "@fissionplane/console-api/*": ["./src/*"]
+    },
+    "types": ["node"]
+  },
+  "include": ["src", "tests"]
+}

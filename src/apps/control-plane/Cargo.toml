@@ -1,0 +1,30 @@
+[package]
+name = "control-plane"
+description = "The replicated management API: admits callers, enforces quotas, places sandboxes onto nodes, owns the durable catalog, mints capability tokens. Off the sandbox data path (docs/components/control-plane.md)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+# Linked per docs/components/artifact-store.md (artifact bookkeeping);
+# used when the manifest format lands.
+artifact-store = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true, features = [
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "signal",
+] }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }
+
+[lints]
+workspace = true

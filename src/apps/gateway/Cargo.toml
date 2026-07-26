@@ -1,0 +1,27 @@
+[package]
+name = "gateway"
+description = "The stateless edge proxy: terminates wildcard TLS, parses the sandbox subdomain, verifies capability tokens or scoped cookies, forwards to the owning node (docs/components/gateway.md)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true, features = [
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "signal",
+] }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }
+
+[lints]
+workspace = true

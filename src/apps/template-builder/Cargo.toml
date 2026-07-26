@@ -1,0 +1,30 @@
+[package]
+name = "template-builder"
+description = "Converts an OCI image reference plus a recipe into a bootable template artifact: unpacks layers, executes recipe steps inside microVMs, caches by content hash (docs/components/template-builder.md)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+# Linked per docs/components/artifact-store.md (publishing template
+# artifacts); used when the manifest format lands.
+artifact-store = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true, features = [
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "signal",
+] }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }
+
+[lints]
+workspace = true

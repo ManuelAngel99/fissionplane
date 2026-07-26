@@ -1,0 +1,24 @@
+{
+  "name": "@fissionplane/core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@effect/platform": "latest",
+    "better-auth": "^1.6.23",
+    "effect": "latest",
+    "nanoid": "^6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

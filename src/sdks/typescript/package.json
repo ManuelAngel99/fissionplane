@@ -1,0 +1,63 @@
+{
+  "name": "@fissionplane/sdk",
+  "version": "0.0.1-beta",
+  "description": "TypeScript SDK for the fissionplane control plane and sandbox data plane.",
+  "license": "Apache-2.0",
+  "author": "Manuel Suarez <manuel_angel99@outlook.com>",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ManuelAngel99/fissionplane.git",
+    "directory": "src/sdks/typescript"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "generate": "openapi-typescript ../../contracts/openapi.yaml --alphabetize --output src/api/schema.gen.ts && openapi-typescript ../../contracts/dataplane.yaml --alphabetize --output src/dataplane/schema.gen.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src tests",
+    "format": "oxfmt --write src tests",
+    "format:check": "oxfmt --check src tests",
+    "test": "vitest run",
+    "build": "tsc --noEmit && tsdown",
+    "docs": "typedoc --out docs src/index.ts"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.15.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "openapi-typescript": "^7.10.0",
+    "oxfmt": "^0.61.0",
+    "oxlint": "^1.76.0",
+    "tsdown": "^0.22.14",
+    "typedoc": "^0.28.20",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

@@ -1,0 +1,196 @@
+---
+import Layout from "../layouts/Layout.astro";
+import SiteFooter from "./SiteFooter.astro";
+import SiteHeader from "./SiteHeader.astro";
+import { getDictionary, type Locale } from "../i18n";
+import "../styles/landing.css";
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = getDictionary(lang);
+
+interface BrandTile {
+  /** Localized asset name. */
+  name: string;
+  /** Localized variant note. */
+  variant: string;
+  /** Asset file stem inside /brand/. */
+  stem: string;
+  /** Tile background: assets for light backgrounds sit on a light tile. */
+  background: "light" | "dark";
+  width: number;
+  height: number;
+}
+
+const tiles: BrandTile[] = [
+  {
+    name: t.brand.assets.lockup,
+    variant: t.brand.assets.darkVariant,
+    stem: "fissionplane-lockup-dark",
+    background: "light",
+    width: 350,
+    height: 42,
+  },
+  {
+    name: t.brand.assets.lockup,
+    variant: t.brand.assets.lightVariant,
+    stem: "fissionplane-lockup-light",
+    background: "dark",
+    width: 350,
+    height: 42,
+  },
+  {
+    name: t.brand.assets.wordmark,
+    variant: t.brand.assets.darkVariant,
+    stem: "fissionplane-wordmark-dark",
+    background: "light",
+    width: 294,
+    height: 42,
+  },
+  {
+    name: t.brand.assets.wordmark,
+    variant: t.brand.assets.lightVariant,
+    stem: "fissionplane-wordmark-light",
+    background: "dark",
+    width: 294,
+    height: 42,
+  },
+  {
+    name: t.brand.assets.icon,
+    variant: t.brand.assets.darkVariant,
+    stem: "fissionplane-icon-dark",
+    background: "light",
+    width: 44,
+    height: 42,
+  },
+  {
+    name: t.brand.assets.icon,
+    variant: t.brand.assets.lightVariant,
+    stem: "fissionplane-icon-light",
+    background: "dark",
+    width: 44,
+    height: 42,
+  },
+];
+
+const palette = [
+  { name: "Ash", hex: "#F1ECEC" },
+  { name: "Silver", hex: "#B7B1B1" },
+  { name: "Stone", hex: "#847E7E" },
+  { name: "Charcoal", hex: "#4B4646" },
+  { name: "Ink", hex: "#131010" },
+];
+---
+
+<Layout
+  title={t.brand.metaTitle}
+  description={t.brand.metaDescription}
+  lang={lang}
+  pagePath="/brand"
+>
+  <div data-page="fissionplane">
+    <div data-component="container">
+      <SiteHeader lang={lang} t={t} />
+
+      <main data-component="content">
+        <section data-component="brand-intro" aria-labelledby="brand-heading">
+          <div data-slot="hero-copy">
+            <h1 id="brand-heading">{t.brand.heading}</h1>
+            <p>{t.brand.subtitle}</p>
+          </div>
+          <a
+            data-slot="download-all"
+            href="/brand/fissionplane-brand.zip"
+            download
+          >
+            {t.brand.downloadAll}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11M7.5 11L12 15.5L16.5 11M5 19h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" /></svg>
+          </a>
+        </section>
+
+        <section data-component="brand-assets" aria-label={t.brand.heading}>
+          <ul>
+            {
+              tiles.map((tile) => (
+                <li data-slot="brand-tile">
+                  <div data-slot="brand-preview" data-background={tile.background}>
+                    <img
+                      src={`/brand/${tile.stem}.svg`}
+                      alt={`FissionPlane ${tile.name} (${tile.variant})`}
+                      width={tile.width}
+                      height={tile.height}
+                      loading="lazy"
+                    />
+                  </div>
+                  <div data-slot="brand-meta">
+                    <span data-slot="brand-name">
+                      {tile.name} <span>· {tile.variant}</span>
+                    </span>
+                    <span data-slot="brand-downloads">
+                      <a href={`/brand/${tile.stem}.svg`} download>
+                        {t.brand.svgLabel}
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11M7.5 11L12 15.5L16.5 11M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="square" /></svg>
+                      </a>
+                      <a href={`/brand/${tile.stem}.png`} download>
+                        {t.brand.pngLabel}
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11M7.5 11L12 15.5L16.5 11M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="square" /></svg>
+                      </a>
+                    </span>
+                  </div>
+                </li>
+              ))
+            }
+          </ul>
+        </section>
+
+        <section
+          data-component="brand-colors"
+          aria-labelledby="brand-colors-heading"
+        >
+          <div data-slot="section-title">
+            <h2 id="brand-colors-heading">{t.brand.colorsHeading}</h2>
+            <p>{t.brand.colorsIntro}</p>
+          </div>
+          <ul>
+            {
+              palette.map((color) => (
+                <li data-slot="swatch">
+                  <span
+                    data-slot="swatch-color"
+                    style={`background: ${color.hex}`}
+                  />
+                  <span data-slot="swatch-name">{color.name}</span>
+                  <span data-slot="swatch-hex">{color.hex}</span>
+                </li>
+              ))
+            }
+          </ul>
+        </section>
+
+        <section
+          data-component="brand-usage"
+          aria-labelledby="brand-usage-heading"
+        >
+          <div data-slot="section-title">
+            <h2 id="brand-usage-heading">{t.brand.usageHeading}</h2>
+          </div>
+          <ul>
+            {
+              t.brand.usageRules.map((rule) => (
+                <li>
+                  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 0h4v2H4zM2 2h8v2H2zM0 4h12v4H0zM2 8h8v2H2zM4 10h4v2H4z" fill="currentColor" /></svg>
+                  <span>{rule}</span>
+                </li>
+              ))
+            }
+          </ul>
+        </section>
+      </main>
+
+      <SiteFooter lang={lang} t={t} pagePath="/brand" />
+    </div>
+  </div>
+</Layout>

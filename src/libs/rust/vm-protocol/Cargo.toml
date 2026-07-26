@@ -1,0 +1,32 @@
+[package]
+name = "vm-protocol"
+description = "The vsock wire contract between vm-host and vm-steward: framing, messages, session state machine."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+bytes = { workspace = true }
+prost = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["io-util"] }
+
+[build-dependencies]
+prost-build = { workspace = true }
+protoc-bin-vendored = { workspace = true }
+
+[dev-dependencies]
+divan = { workspace = true }
+hex = { workspace = true }
+proptest = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+# divan runs its own harness main().
+[[bench]]
+name = "codec"
+harness = false
+
+[lints]
+workspace = true

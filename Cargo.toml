@@ -1,0 +1,125 @@
+[workspace]
+resolver = "2"
+members = [
+    "src/apps/control-plane",
+    "src/apps/gateway",
+    "src/apps/template-builder",
+    "src/apps/vm-host",
+    "src/apps/vm-init",
+    "src/apps/vm-steward",
+    "src/libs/rust/*",
+    "src/sdks/rust",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+# MSRV tracks the pinned toolchain (rust-toolchain.toml): guest binaries
+# are sealed into snapshots, so the minimum advances with the pin rather
+# than floating behind it (Firecracker's rule — pin == what you build
+# with). Bumps are deliberate, reviewed commits.
+rust-version = "1.97"
+license = "Apache-2.0"
+authors = ["Manuel Suarez <manuel_angel99@outlook.com>"]
+publish = false
+
+# One version declaration per dependency, inherited by every crate with
+# `{ workspace = true }`. Feature lists stay in the crate that needs them:
+# the workspace entry is the floor, not the union.
+[workspace.dependencies]
+# Workspace crates
+artifact-store = { path = "src/libs/rust/artifact-store" }
+fissionplane-domain = { path = "src/libs/rust/domain" }
+vm-protocol = { path = "src/libs/rust/vm-protocol" }
+
+# External
+anyhow = "1"
+axum = "0.8"
+bytes = "1"
+divan = "0.1"
+futures-util = "0.3"
+hex = "0.4"
+nanoid = "0.5"
+proptest = "1"
+prost = "0.13"
+prost-build = "0.13"
+protoc-bin-vendored = "3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", default-features = false }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2"
+wiremock = "0.6"
+
+[workspace.lints.rust]
+# Guest code parses hostile input and vm-init must never exit. Crates that
+# genuinely need unsafe (the fc client, snapshot ioctls) relax this locally
+# with a justification comment.
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+# Failure discipline: recoverable errors are Results, and a fault must
+# never unwind into undefined supervision state.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+# Process exit is a lifecycle decision, and lifecycle belongs to the host.
+# The only sanctioned call sites carry a local allow with a justification.
+exit = "deny"
+# When a crate relaxes `unsafe_code`, every block still needs a
+# `// SAFETY:` comment explaining why it is sound.
+undocumented_unsafe_blocks = "deny"
+# Numeric casts on wire-facing code paths must be visibly lossless
+# (`From`) or visibly checked (`try_from`), never silent `as`.
+cast_possible_truncation = "deny"
+cast_possible_wrap = "deny"
+cast_sign_loss = "deny"
+# `unwrap_or(expensive())` evaluates eagerly; require the closure form.
+or_fun_call = "deny"
+# `assert!(r.is_ok())` loses the error; unwrap the Result in tests instead.
+assertions_on_result_states = "warn"
+
+# Local iteration speed: build scripts and proc macros
+# are pure compute and run on the host, so optimise them even in dev.
+# If link times become the bottleneck, the next lever is
+# `debug = "line-tables-only"` on [profile.dev] — deliberately
+# not set yet because it drops variable info from debugger sessions.
+[profile.dev.build-override]
+opt-level = 3
+
+# `cargo build --profile quick`: binaries you run locally, never ship
+# using this profile. No debug info, cheap optimisations, no
+# unwinding tables, maximum codegen parallelism.
+[profile.quick]
+inherits = "dev"
+debug = false
+strip = "symbols"
+opt-level = 1
+panic = "abort"
+codegen-units = 256
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+# Guest code does arithmetic on attacker-influenced lengths and offsets.
+# A checked panic (which aborts, below) is strictly better than a silent
+# wrap feeding a bounds decision.
+overflow-checks = true
+# `panic` cannot be set per-package; it applies workspace-wide. That is
+# acceptable here: a fault must never unwind into undefined supervision
+# state in any shipped binary, guest or host. (The test harness needs
+# unwinding, but tests build with the dev profile.)
+panic = "abort"

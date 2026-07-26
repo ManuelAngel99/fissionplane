@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@fissionplane/backoffice-api": ["./src/index.ts"],
+      "@fissionplane/backoffice-api/*": ["./src/*"]
+    },
+    "types": ["node"]
+  },
+  "include": ["src", "tests"]
+}

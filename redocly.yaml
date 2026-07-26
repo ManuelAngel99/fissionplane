@@ -1,0 +1,10 @@
+# Lint configuration for src/contracts/openapi.yaml (`just lint-spec`; CI runs it
+# on every push). The recommended ruleset applies except where noted.
+extends:
+  - recommended
+
+rules:
+  # The installation domain does not exist yet, and the SDKs take the
+  # base URL from configuration rather than from the document, so the
+  # placeholder server is deliberate.
+  no-server-example.com: off

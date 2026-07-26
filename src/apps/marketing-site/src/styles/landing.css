@@ -1,0 +1,1605 @@
+/* Landing page styles. Components are addressed by data-component and
+   data-slot attributes, mirroring the semantic markup pattern. */
+
+body {
+  background: var(--color-background);
+}
+
+[data-page='fissionplane'] {
+  --padding: 5rem;
+  --vertical-padding: 4rem;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--vertical-padding);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  padding-bottom: 5rem;
+}
+
+@media (max-width: 60rem) {
+  [data-page='fissionplane'] {
+    --padding: 1.5rem;
+    --vertical-padding: 3rem;
+    font-size: 15px;
+  }
+}
+
+[data-page='fissionplane'] a {
+  color: var(--color-text-strong);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: var(--space-1);
+}
+
+[data-page='fissionplane'] p {
+  line-height: 200%;
+}
+
+@media (max-width: 60rem) {
+  [data-page='fissionplane'] p {
+    line-height: 180%;
+  }
+}
+
+/* ---- Framed container ------------------------------------------------ */
+
+[data-component='container'] {
+  /* Auto margins on a column-flex child take precedence over stretch, which
+     would size the frame to its content and narrow it on short pages. */
+  width: 100%;
+  max-width: 76rem;
+  margin: 0 auto;
+  border: 1px solid var(--color-border-weak);
+  border-top: none;
+}
+
+@media (max-width: 76rem) {
+  [data-component='container'] {
+    border: none;
+  }
+}
+
+/* ---- Top navigation -------------------------------------------------- */
+
+[data-component='top'] {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 80px;
+  min-height: 80px;
+  padding: 24px var(--padding);
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border-weak);
+}
+
+[data-slot='brand'] img {
+  height: 30px;
+  width: auto;
+}
+
+/* The lockup ships light-on-dark. Invert it for light mode. */
+@media (prefers-color-scheme: light) {
+  [data-slot='brand'] img {
+    filter: invert(0.93);
+  }
+}
+
+[data-component='nav-desktop'] ul {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: 0;
+  list-style: none;
+}
+
+[data-component='nav-desktop'] a {
+  color: var(--color-text-strong);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+[data-component='nav-desktop'] a span {
+  color: var(--color-text-weak);
+}
+
+[data-component='nav-desktop'] a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: var(--space-1);
+}
+
+/* ---- Hero ------------------------------------------------------------ */
+
+[data-component='hero'],
+[data-component='contact'] {
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  padding: calc(var(--vertical-padding) * 1.5) var(--padding);
+}
+
+@media (max-width: 30rem) {
+  [data-component='hero'],
+  [data-component='contact'] {
+    padding: var(--vertical-padding) var(--padding);
+  }
+}
+
+[data-slot='hero-copy'] h1 {
+  margin-bottom: 16px;
+  color: var(--color-text-strong);
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+@media (max-width: 60rem) {
+  [data-slot='hero-copy'] h1 {
+    font-size: 24px;
+  }
+}
+
+[data-slot='hero-copy'] p {
+  max-width: 70ch;
+  margin-bottom: 56px;
+  color: var(--color-text);
+}
+
+@media (max-width: 50rem) {
+  [data-slot='hero-copy'] p {
+    max-width: 100%;
+    margin-bottom: 40px;
+  }
+}
+
+[data-slot='br'] {
+  display: block;
+}
+
+@media (max-width: 60rem) {
+  [data-slot='br'] {
+    display: none;
+  }
+}
+
+/* ---- Hero grid: one framed panel, deploy (left) and SDKs (right) ------ */
+
+/* A single hairline-framed panel, split into two cells by a 1px seam,
+   matching the workload grid and footer treatment. */
+[data-slot='hero-grid'] {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  /* Shared rows: header, content, note. Both cells subgrid onto them, so
+     the bottom hairlines land on the same line even when one note wraps. */
+  grid-template-rows: auto 1fr auto;
+  gap: 1px;
+  overflow: hidden;
+  background: var(--color-border-weak);
+  border: 1px solid var(--color-border-weak);
+  border-radius: 6px;
+}
+
+@media (max-width: 67.5rem) {
+  [data-slot='hero-grid'] {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+  }
+}
+
+/* min-width: 0 keeps long code lines from resizing the grid track when
+   tabs switch; the code block scrolls horizontally instead. */
+[data-slot='hero-column'] {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  min-width: 0;
+  background: var(--color-background);
+}
+
+[data-slot='column-header'] {
+  padding: 24px 28px 20px;
+}
+
+@media (max-width: 60rem) {
+  [data-slot='column-header'] {
+    padding: 20px 20px 16px;
+  }
+}
+
+[data-slot='column-heading'] {
+  margin-bottom: 6px;
+  color: var(--color-text-strong);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+[data-slot='column-tagline'] {
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+/* Footnotes share the last subgrid row, so both hairlines align even when
+   one note wraps to more lines than the other. */
+[data-slot='column-note'] {
+  padding: 14px 28px;
+  border-top: 1px solid var(--color-border-weak);
+  color: var(--color-text-weak);
+  font-size: 13px;
+}
+
+@media (max-width: 60rem) {
+  [data-slot='column-note'] {
+    padding: 12px 20px;
+  }
+}
+
+/* The agent-prompt trigger reads as a link but is a button: clicking it
+   copies a prompt to the clipboard instead of navigating. */
+[data-slot='agent-link'] {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: var(--space-1);
+  cursor: pointer;
+}
+
+[data-slot='agent-link']:hover {
+  color: var(--color-text-strong);
+}
+
+[data-slot='agent-link']:focus-visible {
+  outline: 1px solid var(--color-background-strong);
+  outline-offset: 2px;
+}
+
+/* Code examples inside the hero step down two sizes so the longest SDK
+   lines fit the column with room to spare. */
+[data-slot='hero-grid'] [data-slot='example'] {
+  font-size: 12px;
+}
+
+/* ---- Deploy-anywhere visual: the mark flows into provider logos --------- */
+
+[data-slot='deploy-visual'] {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  padding: 8px 28px 32px;
+}
+
+@media (max-width: 60rem) {
+  [data-slot='deploy-visual'] {
+    padding: 8px 20px 24px;
+  }
+}
+
+[data-slot='deploy-hub'] {
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+}
+
+[data-slot='deploy-hub'] img {
+  width: auto;
+  height: 40px;
+}
+
+/* The icon ships light-on-dark. Invert it for light mode, like the header. */
+@media (prefers-color-scheme: light) {
+  [data-slot='deploy-hub'] img {
+    filter: invert(0.93);
+  }
+}
+
+/* Pixel-dashed connector from the mark into the provider grid. */
+[data-slot='deploy-line'] {
+  width: 2px;
+  height: 32px;
+  margin: 10px auto;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--color-border) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+[data-slot='deploy-grid'] {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--color-border-weak);
+  border: 1px solid var(--color-border-weak);
+  border-radius: 6px;
+  list-style: none;
+}
+
+[data-slot='deploy-grid'] li {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 28px 12px 20px;
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+[data-slot='deploy-grid'] li:hover {
+  color: var(--color-text-strong);
+}
+
+[data-slot='deploy-grid'] li svg {
+  width: auto;
+  height: 44px;
+}
+
+[data-slot='deploy-grid'] li span {
+  color: var(--color-text-weak);
+  font-size: 12px;
+}
+
+/* ---- Install tabs (CSS-only, no JavaScript) --------------------------- */
+
+[data-slot='installation'] {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+[data-slot='installation'] .install-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+[data-slot='tablist'] {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  padding: 0 28px;
+  background: var(--color-background-weak);
+  border-top: 1px solid var(--color-border-weak);
+  border-bottom: 1px solid var(--color-border-weak);
+}
+
+@media (max-width: 60rem) {
+  [data-slot='tablist'] {
+    gap: 32px;
+    width: 100%;
+    padding: 0 20px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+}
+
+[data-slot='tab'] {
+  padding: 16px 0;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-weak);
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+#install-ts:checked ~ [data-slot='tablist'] [for='install-ts'],
+#install-py:checked ~ [data-slot='tablist'] [for='install-py'],
+#install-rust:checked ~ [data-slot='tablist'] [for='install-rust'] {
+  color: var(--color-text-strong);
+  border-bottom-color: var(--color-background-strong);
+}
+
+[data-slot='tab']:hover {
+  color: var(--color-text);
+}
+
+[data-slot='panels'] {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 0;
+  background: var(--color-background-weak);
+}
+
+[data-slot='panel'] {
+  position: relative;
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+}
+
+#install-ts:checked ~ [data-slot='panels'] [data-panel='ts'],
+#install-py:checked ~ [data-slot='panels'] [data-panel='py'],
+#install-rust:checked ~ [data-slot='panels'] [data-panel='rust'] {
+  display: flex;
+}
+
+/* Copyable command row. A rule below it separates the install command from
+   the code example, so the two read as distinct rows. */
+[data-slot='command'] {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  margin: 0;
+  padding: 14px 28px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--color-border-weak);
+  border-radius: 0;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-slot='command']:hover {
+  background: var(--color-background-weak-hover);
+}
+
+[data-slot='command']:focus-visible {
+  outline: 1px solid var(--color-background-strong);
+  outline-offset: 2px;
+}
+
+[data-slot='command-script'] {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-slot='command-script'] [data-slot='highlight'] {
+  color: var(--color-text-strong);
+  font-weight: 500;
+}
+
+[data-component='copy-status'] svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+[data-component='copy-status'] [data-slot='copy'] {
+  display: block;
+  color: var(--color-text-weaker);
+}
+
+[data-component='copy-status'] [data-slot='check'] {
+  display: none;
+  color: var(--color-text-strong);
+}
+
+[data-slot='command']:hover [data-slot='copy'] {
+  color: var(--color-text-weak);
+}
+
+[data-copied] [data-component='copy-status'] [data-slot='copy'] {
+  display: none;
+}
+
+[data-copied] [data-component='copy-status'] [data-slot='check'] {
+  display: block;
+}
+
+/* Floating copy button in the bottom-right corner of the code window. */
+[data-slot='copy-code'] {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: var(--color-background);
+  border: 1px solid var(--color-border-weak);
+  border-radius: 6px;
+  color: var(--color-text-weak);
+  cursor: pointer;
+}
+
+[data-slot='copy-code']:hover {
+  background: var(--color-background-weak-hover);
+}
+
+[data-slot='copy-code']:hover [data-slot='copy'] {
+  color: var(--color-text);
+}
+
+[data-slot='copy-code']:focus-visible {
+  outline: 1px solid var(--color-background-strong);
+  outline-offset: 2px;
+}
+
+/* The tooltip mirrors the live aria-label, so it reads "Copy code" at
+   rest and "Copied" right after a click. */
+[data-slot='copy-code']::after {
+  content: attr(aria-label);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  padding: 6px 10px;
+  background: var(--color-background-strong);
+  border-radius: 4px;
+  color: var(--color-text-inverted);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+[data-slot='copy-code']:hover::after,
+[data-slot='copy-code']:focus-visible::after,
+[data-slot='copy-code'][data-copied]::after {
+  opacity: 1;
+}
+
+/* Code example under the command row. The height is anchored between the
+   shortest (TypeScript) and tallest (Rust) samples, so switching SDK tabs
+   never resizes the panel: short samples get breathing room, long ones
+   scroll inside. The mid-line cut on Rust signals there is more to scroll. */
+[data-slot='example'] {
+  flex: none;
+  height: 348px;
+  margin: 0;
+  padding: 16px 28px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.75;
+  white-space: pre;
+}
+
+@media (max-width: 60rem) {
+  [data-slot='example'] {
+    padding: 16px 20px;
+  }
+}
+
+/* Manual syntax tokens: keywords blue, strings violet, definitions amber,
+   properties teal, constants coral, punctuation dimmed. */
+[data-slot='example'] .t-c {
+  color: var(--syntax-comment);
+}
+
+[data-slot='example'] .t-k {
+  color: var(--syntax-keyword);
+}
+
+[data-slot='example'] .t-s {
+  color: var(--syntax-string);
+}
+
+[data-slot='example'] .t-d {
+  color: var(--syntax-definition);
+}
+
+[data-slot='example'] .t-p {
+  color: var(--syntax-property);
+}
+
+[data-slot='example'] .t-n {
+  color: var(--syntax-static);
+}
+
+[data-slot='example'] .t-x {
+  color: var(--syntax-punctuation);
+}
+
+/* ---- Copy toast: quiet confirmation, bottom-right ---------------------- */
+
+[data-component='copy-toast'] {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 18px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border-weak);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px hsla(0, 0%, 0%, 0.25);
+  color: var(--color-text-strong);
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+[data-component='copy-toast'][data-state='visible'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+[data-component='copy-toast'] svg {
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component='copy-toast'] {
+    transform: none;
+    transition: opacity 160ms ease;
+  }
+}
+
+/* ---- Generic section titles ------------------------------------------ */
+
+[data-slot='section-title'] {
+  max-width: 100%;
+  margin-bottom: 24px;
+}
+
+[data-slot='section-title'] h2,
+[data-slot='section-title'] h3 {
+  margin-bottom: 12px;
+  color: var(--color-text-strong);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+[data-slot='section-title'] p {
+  max-width: 75ch;
+  margin-bottom: 12px;
+  color: var(--color-text);
+}
+
+/* ---- Below-fold sections: defer layout/paint until near viewport ------ */
+
+[data-component='workloads'],
+[data-component='architecture'],
+[data-component='use-cases'],
+[data-component='what'],
+[data-component='faq'],
+[data-component='cta'],
+[data-component='footer'],
+[data-component='legal'] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
+}
+
+/* ---- "What is" section ------------------------------------------------ */
+
+[data-component='what'] {
+  padding: var(--vertical-padding) var(--padding);
+  border-top: 1px solid var(--color-border-weak);
+  color: var(--color-text);
+}
+
+[data-component='what'] > a {
+  display: flex;
+  width: fit-content;
+  gap: 12px;
+  align-items: center;
+  margin-top: 40px;
+  padding: 8px 12px 8px 20px;
+  background: var(--color-background-strong);
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text-inverted);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+[data-component='what'] > a:hover {
+  background: var(--color-background-strong-hover);
+}
+
+[data-component='what'] ul {
+  padding: 0;
+}
+
+[data-component='what'] li {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 16px;
+  line-height: 200%;
+  list-style: none;
+}
+
+@media (max-width: 60rem) {
+  [data-component='what'] li {
+    line-height: 180%;
+  }
+}
+
+[data-component='what'] li:last-child {
+  margin-bottom: 0;
+}
+
+[data-component='what'] li svg {
+  flex-shrink: 0;
+  color: var(--color-icon);
+  transform: translateY(1px);
+}
+
+[data-component='what'] li span {
+  max-width: 75ch;
+}
+
+[data-component='what'] li strong {
+  margin-right: 12px;
+  color: var(--color-text-strong);
+  font-weight: 500;
+}
+
+/* ---- FAQ (native details, no JavaScript) ------------------------------ */
+
+[data-component='faq'] {
+  padding: var(--vertical-padding) var(--padding);
+  border-top: 1px solid var(--color-border-weak);
+}
+
+[data-component='faq'] ul {
+  padding: 0;
+}
+
+[data-component='faq'] li {
+  margin-bottom: 24px;
+  line-height: 200%;
+  list-style: none;
+}
+
+[data-component='faq'] details {
+  margin: 0;
+}
+
+[data-component='faq'] summary {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-height: 24px;
+  margin-bottom: 8px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-text-strong);
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+
+[data-component='faq'] summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-component='faq'] summary [data-slot='faq-icon'] {
+  flex-shrink: 0;
+  margin-top: 6px;
+  color: var(--color-text-weak);
+}
+
+[data-component='faq'] summary [data-slot='faq-icon-minus'] {
+  display: none;
+}
+
+[data-component='faq'] details[open] summary [data-slot='faq-icon-plus'] {
+  display: none;
+}
+
+[data-component='faq'] details[open] summary [data-slot='faq-icon-minus'] {
+  display: block;
+}
+
+[data-component='faq'] summary [data-slot='faq-question-text'] {
+  flex-grow: 1;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+[data-component='faq'] [data-slot='faq-answer'] {
+  max-width: 75ch;
+  margin-bottom: 8px;
+  margin-left: 40px;
+  line-height: 200%;
+}
+
+/* ---- Call to action ---------------------------------------------------- */
+
+[data-component='cta'] {
+  display: flex;
+  padding: var(--vertical-padding) var(--padding);
+  border-top: 1px solid var(--color-border-weak);
+}
+
+[data-slot='cta-copy'] strong {
+  display: block;
+  margin-bottom: 16px;
+  color: var(--color-text-strong);
+  font-weight: 700;
+}
+
+[data-slot='cta-copy'] p {
+  max-width: 75ch;
+  margin-bottom: 24px;
+  color: var(--color-text);
+}
+
+@media (max-width: 50rem) {
+  [data-slot='cta-copy'] p {
+    max-width: 100%;
+  }
+}
+
+[data-slot='cta-copy'] a {
+  display: flex;
+  width: fit-content;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px 8px 20px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border-weak);
+  border-radius: 4px;
+  color: var(--color-text-strong);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+[data-slot='cta-copy'] a:hover {
+  background: var(--color-background-weak);
+}
+
+/* ---- Footer ------------------------------------------------------------ */
+
+[data-component='footer'] {
+  display: flex;
+  flex-direction: row;
+  border-top: 1px solid var(--color-border-weak);
+  border-bottom: 1px solid var(--color-border-weak);
+}
+
+[data-component='footer'] [data-slot='cell'] {
+  flex: 1;
+  text-align: center;
+}
+
+[data-component='footer'] [data-slot='cell'] a {
+  display: block;
+  width: 100%;
+  padding: 2rem 0;
+  text-decoration: none;
+}
+
+[data-component='footer'] [data-slot='cell'] a span {
+  color: var(--color-text-weak);
+}
+
+@media (max-width: 40rem) {
+  [data-component='footer'] [data-slot='cell'] a span {
+    display: none;
+  }
+}
+
+[data-component='footer'] [data-slot='cell'] a:hover {
+  background: var(--color-background-weak);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: var(--space-1);
+}
+
+[data-component='footer'] [data-slot='cell'] + [data-slot='cell'] {
+  border-left: 1px solid var(--color-border-weak);
+}
+
+@media (max-width: 25rem) {
+  [data-component='footer'] {
+    flex-wrap: wrap;
+  }
+
+  [data-component='footer'] [data-slot='cell'] {
+    flex: 1 0 100%;
+    border-top: 1px solid var(--color-border-weak);
+  }
+
+  [data-component='footer'] [data-slot='cell']:first-child {
+    border-top: none;
+  }
+
+  /* Matches the specificity of the side-by-side divider rule above. */
+  [data-component='footer'] [data-slot='cell'] + [data-slot='cell'] {
+    border-left: none;
+  }
+}
+
+/* ---- Legal ------------------------------------------------------------- */
+
+[data-component='legal'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  align-items: center;
+  justify-content: center;
+  padding: var(--vertical-padding) var(--padding);
+  color: var(--color-text-weak);
+  text-align: center;
+}
+
+[data-component='legal'] a {
+  color: var(--color-text-weak);
+  text-decoration: none;
+}
+
+[data-component='legal'] a:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: var(--space-1);
+}
+
+/* ---- Language picker (native details, opens upward) --------------------- */
+
+[data-component='lang-picker'] {
+  position: relative;
+}
+
+[data-component='lang-picker'] summary {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--color-text-weak);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+[data-component='lang-picker'] summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-component='lang-picker'] summary:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: var(--space-1);
+}
+
+[data-component='lang-picker'] summary svg {
+  transition: transform 120ms ease;
+}
+
+[data-component='lang-picker'][open] summary svg {
+  transform: rotate(180deg);
+}
+
+[data-component='lang-picker'] ul {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  z-index: 20;
+  min-width: 10rem;
+  margin: 0;
+  padding: 6px 0;
+  background: var(--color-background);
+  border: 1px solid var(--color-border-weak);
+  border-radius: 4px;
+  list-style: none;
+  transform: translateX(-50%);
+}
+
+[data-component='lang-picker'] li a {
+  display: block;
+  padding: 8px 20px;
+  color: var(--color-text);
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+[data-component='lang-picker'] li a:hover {
+  background: var(--color-background-weak);
+  color: var(--color-text-strong);
+}
+
+[data-component='lang-picker'] li a[aria-current='true'] {
+  color: var(--color-text-strong);
+  font-weight: 500;
+}
+
+/* ---- Workloads: sandboxes and functions, side by side ------------------- */
+
+[data-component='workloads'] {
+  padding: var(--vertical-padding) var(--padding);
+  border-top: 1px solid var(--color-border-weak);
+}
+
+[data-slot='workload-grid'] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--color-border-weak);
+  border: 1px solid var(--color-border-weak);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+@media (max-width: 50rem) {
+  [data-slot='workload-grid'] {
+    grid-template-columns: 1fr;
+  }
+}
+
+[data-slot='workload'] {
+  padding: 24px;
+  background: var(--color-background-weak);
+}
+
+[data-slot='workload'] h3 {
+  margin-bottom: 4px;
+  color: var(--color-text-strong);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+[data-slot='workload-tagline'] {
+  margin-bottom: 16px;
+  color: var(--color-text);
+}
+
+[data-slot='workload'] ul {
+  padding: 0;
+}
+
+[data-slot='workload'] li {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 10px;
+  line-height: 180%;
+  list-style: none;
+}
+
+[data-slot='workload'] li:last-child {
+  margin-bottom: 0;
+}
+
+[data-slot='workload'] li svg {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  color: var(--color-icon);
+  transform: translateY(1px);
+}
+
+/* ---- Architecture diagram ------------------------------------------------ */
+
+[data-component='architecture'] {
+  padding: var(--vertical-padding) var(--padding);
+  border-top: 1px solid var(--color-border-weak);
+}
+
+[data-component='architecture'] [data-slot='diagram'] {
+  width: fit-content;
+  max-width: 100%;
+  margin: 24px auto 0;
+  padding: 4px 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 60rem) {
+  [data-component='architecture'] [data-slot='diagram'] {
+    font-size: 11px;
+    margin-left: 0;
+  }
+}
+
+/* ---- Use cases: hairline grid -------------------------------------------- */
+
+[data-component='use-cases'] {
+  padding: var(--vertical-padding) var(--padding);
+  border-top: 1px solid var(--color-border-weak);
+}
+
+[data-component='use-cases'] ul {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  padding: 0;
+  background: var(--color-border-weak);
+  border: 1px solid var(--color-border-weak);
+  list-style: none;
+}
+
+@media (max-width: 60rem) {
+  [data-component='use-cases'] ul {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 40rem) {
+  [data-component='use-cases'] ul {
+    grid-template-columns: 1fr;
+  }
+}
+
+[data-component='use-cases'] li {
+  padding: 20px;
+  background: var(--color-background);
+}
+
+[data-component='use-cases'] li h3 {
+  margin-bottom: 8px;
+  color: var(--color-text-strong);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+[data-component='use-cases'] li p {
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 180%;
+}
+
+/* ---- Brand page ----------------------------------------------------------- */
+
+[data-component='brand-intro'] {
+  padding: calc(var(--vertical-padding) * 1.5) var(--padding)
+    var(--vertical-padding);
+}
+
+[data-component='brand-intro'] [data-slot='download-all'] {
+  display: flex;
+  width: fit-content;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 20px;
+  background: var(--color-background-strong);
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text-inverted);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+[data-component='brand-intro'] [data-slot='download-all']:hover {
+  background: var(--color-background-strong-hover);
+}
+
+[data-component='brand-assets'] {
+  padding: 0 var(--padding) var(--vertical-padding);
+}
+
+[data-component='brand-assets'] ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px 24px;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 50rem) {
+  [data-component='brand-assets'] ul {
+    grid-template-columns: 1fr;
+  }
+}
+
+[data-slot='brand-preview'] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  padding: 32px;
+  border: 1px solid var(--color-border-weak);
+  border-radius: 6px;
+}
+
+/* Checkerboards signal transparency, light and dark like the schemes. */
+[data-slot='brand-preview'][data-background='light'] {
+  background: repeating-conic-gradient(#f6f2f2 0% 25%, #ebe5e5 0% 50%) 0 0 /
+    16px 16px;
+}
+
+[data-slot='brand-preview'][data-background='dark'] {
+  background: repeating-conic-gradient(#1a1616 0% 25%, #131010 0% 50%) 0 0 /
+    16px 16px;
+}
+
+[data-slot='brand-preview'] img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 52px;
+}
+
+[data-slot='brand-meta'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 12px 4px 0;
+}
+
+[data-slot='brand-name'] {
+  color: var(--color-text-strong);
+  font-weight: 500;
+}
+
+[data-slot='brand-name'] span {
+  color: var(--color-text-weak);
+  font-weight: 400;
+}
+
+[data-slot='brand-downloads'] {
+  display: inline-flex;
+  gap: 20px;
+}
+
+[data-slot='brand-downloads'] a {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+[data-slot='brand-downloads'] a:hover {
+  color: var(--color-text-strong);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: var(--space-1);
+}
+
+[data-component='brand-colors'] {
+  padding: var(--vertical-padding) var(--padding);
+  border-top: 1px solid var(--color-border-weak);
+}
+
+[data-component='brand-colors'] ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 0;
+  list-style: none;
+}
+
+[data-slot='swatch'] {
+  width: 8.5rem;
+  padding: 8px;
+  border: 1px solid var(--color-border-weak);
+  border-radius: 6px;
+}
+
+[data-slot='swatch-color'] {
+  display: block;
+  height: 64px;
+  margin-bottom: 8px;
+  border: 1px solid var(--color-border-weak);
+  border-radius: 4px;
+}
+
+[data-slot='swatch-name'] {
+  display: block;
+  color: var(--color-text-strong);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+[data-slot='swatch-hex'] {
+  color: var(--color-text-weak);
+  font-size: 12px;
+}
+
+[data-component='brand-usage'] {
+  padding: var(--vertical-padding) var(--padding);
+  border-top: 1px solid var(--color-border-weak);
+}
+
+[data-component='brand-usage'] ul {
+  padding: 0;
+}
+
+[data-component='brand-usage'] li {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 16px;
+  line-height: 200%;
+  list-style: none;
+}
+
+[data-component='brand-usage'] li:last-child {
+  margin-bottom: 0;
+}
+
+[data-component='brand-usage'] li svg {
+  flex-shrink: 0;
+  color: var(--color-icon);
+  transform: translateY(1px);
+}
+
+/* ---- Privacy page ---------------------------------------------------------- */
+
+[data-component='privacy-intro'] {
+  padding: calc(var(--vertical-padding) * 1.5) var(--padding)
+    var(--vertical-padding);
+}
+
+[data-component='privacy-section'] {
+  padding: var(--vertical-padding) var(--padding);
+  border-top: 1px solid var(--color-border-weak);
+}
+
+[data-component='privacy-section'] [data-slot='section-title'] {
+  max-width: 44rem;
+  margin-bottom: 0;
+}
+
+[data-component='privacy-section'] [data-slot='section-title'] p:last-child {
+  margin-bottom: 0;
+}
+
+[data-consent-status] {
+  color: var(--color-text-strong);
+}
+
+[data-slot='consent-controls'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* The controls do nothing without JavaScript, and a browser already sending
+   Global Privacy Control or Do Not Track overrides them either way. */
+html:not([data-consent]) [data-slot='consent-controls'],
+html[data-consent='signalled'] [data-slot='consent-controls'] {
+  display: none;
+}
+
+[data-slot='consent-controls'] button {
+  padding: 8px 20px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-strong);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+[data-slot='consent-controls'] button:hover {
+  background: var(--color-background-weak);
+}
+
+[data-slot='consent-controls'] button[aria-pressed='true'] {
+  background: var(--color-background-strong);
+  border-color: var(--color-background-strong);
+  color: var(--color-text-inverted);
+}
+
+[data-slot='consent-controls'] button:focus-visible {
+  outline: 1px solid var(--color-background-strong);
+  outline-offset: 2px;
+}
+
+/* ---- Contact page ------------------------------------------------------ */
+
+/* The same framed panel treatment as the hero grid: one hairline frame,
+   cells split by 1px seams, header cells on a shared subgrid row. */
+[data-slot='contact-grid'] {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  grid-template-rows: auto 1fr;
+  gap: 1px;
+  overflow: hidden;
+  background: var(--color-border-weak);
+  border: 1px solid var(--color-border-weak);
+  border-radius: 6px;
+}
+
+@media (max-width: 67.5rem) {
+  [data-slot='contact-grid'] {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+  }
+}
+
+[data-slot='contact-column'] {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  min-width: 0;
+  background: var(--color-background);
+}
+
+/* Label/value rows: channel name in weak ink, destination in strong ink. */
+[data-slot='contact-channels'] {
+  align-self: start;
+  padding: 6px 28px 24px;
+  list-style: none;
+}
+
+@media (max-width: 60rem) {
+  [data-slot='contact-channels'] {
+    padding: 4px 20px 20px;
+  }
+}
+
+[data-slot='contact-channels'] li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 14px 0;
+}
+
+[data-slot='contact-channels'] li + li {
+  border-top: 1px solid var(--color-border-weak);
+}
+
+[data-slot='contact-channels'] li > span {
+  color: var(--color-text-weak);
+  font-size: 13px;
+}
+
+[data-slot='contact-channels'] a {
+  color: var(--color-text-strong);
+  text-decoration: none;
+}
+
+[data-slot='contact-channels'] a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: var(--space-1);
+}
+
+[data-slot='contact-channels'] a span {
+  color: var(--color-text-weak);
+}
+
+[data-component='contact-form'] {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 28px 28px;
+}
+
+@media (max-width: 60rem) {
+  [data-component='contact-form'] {
+    padding: 16px 20px 24px;
+  }
+}
+
+/* Honeypot: invisible to people, still present in the DOM for bots. */
+[data-component='contact-form'] [data-slot='honeypot'] {
+  display: none;
+}
+
+[data-component='contact-form'] [data-slot='field'] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-component='contact-form'] label {
+  color: var(--color-text-strong);
+  font-weight: 500;
+}
+
+[data-component='contact-form'] input[type='email'],
+[data-component='contact-form'] textarea {
+  padding: 10px 12px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-strong);
+  font: inherit;
+}
+
+[data-component='contact-form'] textarea {
+  min-height: 160px;
+  resize: vertical;
+}
+
+[data-component='contact-form'] input[type='email']:focus-visible,
+[data-component='contact-form'] textarea:focus-visible {
+  outline: 1px solid var(--color-background-strong);
+  outline-offset: 2px;
+}
+
+[data-slot='field-hint'] {
+  color: var(--color-text-weak);
+  font-size: 12px;
+}
+
+[data-slot='field-error'] {
+  color: var(--color-danger);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+[data-slot='field-error']:empty {
+  display: none;
+}
+
+[data-slot='form-actions'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: center;
+}
+
+[data-component='contact-form'] button[type='submit'] {
+  padding: 8px 20px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-strong);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+[data-component='contact-form'] button[type='submit']:hover {
+  background: var(--color-background-weak);
+}
+
+[data-component='contact-form'] button[type='submit']:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+[data-component='contact-form'] button[type='submit']:focus-visible {
+  outline: 1px solid var(--color-background-strong);
+  outline-offset: 2px;
+}
+
+[data-slot='form-status'] {
+  color: var(--color-text-strong);
+}
+
+[data-slot='form-status'][data-state='error'] {
+  color: var(--color-danger);
+  font-weight: 500;
+}
+
+[data-component='contact-form'] [aria-invalid='true'] {
+  border-color: var(--color-danger);
+  box-shadow: inset 0 0 0 1px var(--color-danger);
+}
+
+[data-slot='form-status']:empty {
+  display: none;
+}

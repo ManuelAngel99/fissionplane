@@ -1,0 +1,89 @@
+name: Rust
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+env:
+  CARGO_TERM_COLOR: always
+  # Incremental artifacts are wasted work on ephemeral runners.
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Reads rust-toolchain.toml, so CI compiles with the pinned version.
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - run: cargo fmt --all --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      # One shared cache entry across the Rust jobs:
+      # the target dirs are near-identical and PRs should hit main's.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-ci"
+          cache-on-failure: true
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-ci"
+          cache-on-failure: true
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      # nextest: per-test process isolation, sane output, and the ci
+      # profile in .config/nextest.toml (junit, no fail-fast).
+      - run: cargo nextest run --workspace --locked --profile ci
+
+  deny:
+    name: Deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+  # The two binaries that ship inside the guest must keep building as
+  # statically linked musl executables; a dependency that silently drags
+  # in a dynamic-linking requirement should fail here, not at image-build
+  # time.
+  build-guest:
+    name: Guest binaries (musl)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-ci"
+          cache-on-failure: true
+      - run: cargo build --release --locked --target x86_64-unknown-linux-musl -p vm-init -p vm-steward
+      - name: Verify static linkage
+        run: |
+          for bin in vm-init vm-steward; do
+            file "target/x86_64-unknown-linux-musl/release/$bin" | tee /dev/stderr | grep -q 'static' \
+              || { echo "$bin is not statically linked" >&2; exit 1; }
+          done

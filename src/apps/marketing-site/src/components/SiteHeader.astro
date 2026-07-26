@@ -1,0 +1,46 @@
+---
+import lockup from "../assets/lockup.svg?url";
+import type { Dictionary } from "../i18n";
+import { localePath, type Locale } from "../i18n";
+import { DOCS_URL, GITHUB_URL } from "../lib/site";
+
+interface Props {
+  lang: Locale;
+  t: Dictionary;
+}
+
+const { lang, t } = Astro.props;
+---
+
+<header data-component="top">
+  <a href={localePath(lang, "/")} data-slot="brand" aria-label={t.nav.homeAriaLabel}>
+    <img src={lockup} alt="FissionPlane" width="350" height="42" />
+  </a>
+  <nav data-component="nav-desktop" aria-label="Main navigation">
+    <ul>
+      <li>
+        <a href={localePath(lang, "/contact")}>{t.nav.contact}</a>
+      </li>
+      <li>
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={t.nav.githubTitle}
+        >
+          {t.nav.github}
+        </a>
+      </li>
+      <li>
+        <a
+          href={DOCS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={t.nav.docsTitle}
+        >
+          {t.nav.docs}
+        </a>
+      </li>
+    </ul>
+  </nav>
+</header>

@@ -1,0 +1,27 @@
+[package]
+name = "vm-steward"
+description = "The in-guest agent: processes with PTY, filesystem, watches, port relay, lifecycle hooks. Speaks vm-protocol."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [
+  "fs",
+  "io-util",
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "signal",
+  "time",
+] }
+vm-protocol = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["io-util", "macros", "rt"] }
+
+[lints]
+workspace = true

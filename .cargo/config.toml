@@ -1,0 +1,22 @@
+# Workspace-wide cargo configuration. This file is committed, so every
+# entry must be correct on every developer machine and in CI; anything
+# host-specific (faster linkers, sccache) stays commented with setup
+# instructions.
+
+[net]
+# Tolerate flaky registries (Firecracker's setting).
+retry = 10
+# Fetch git dependencies through the system git, which carries the
+# user's credentials and proxy configuration (Firecracker's setting).
+git-fetch-with-cli = true
+
+# Faster local linking on Linux: install mold (`sudo apt install mold`)
+# and uncomment. macOS already links fast with the system linker.
+# [target.x86_64-unknown-linux-gnu]
+# linker = "clang"
+# rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+# Shared compile cache across checkouts: export RUSTC_WRAPPER=sccache in
+# your shell profile. Deliberately not set here so CI caching
+# (Swatinem/rust-cache in rust.yml) remains the single explicit
+# mechanism in the pipeline.

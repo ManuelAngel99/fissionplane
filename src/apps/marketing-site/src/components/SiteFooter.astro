@@ -1,0 +1,106 @@
+---
+import type { Dictionary } from "../i18n";
+import {
+  LOCALES,
+  LOCALE_LABELS,
+  LOCALE_TAGS,
+  localePath,
+  type Locale,
+} from "../i18n";
+import {
+  CHANGELOG_URL,
+  COPYRIGHT_HOLDER,
+  DOCS_URL,
+  GITHUB_URL,
+  LICENSE_FILE_URL,
+} from "../lib/site";
+
+interface Props {
+  lang: Locale;
+  t: Dictionary;
+  /** Locale-agnostic path of the current page ("/", "/brand", …). */
+  pagePath: string;
+}
+
+const { lang, t, pagePath } = Astro.props;
+const year = new Date().getFullYear();
+---
+
+<footer data-component="footer">
+  <div data-slot="cell">
+    <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
+      {t.footer.github}
+    </a>
+  </div>
+  <div data-slot="cell">
+    <a href={DOCS_URL} target="_blank" rel="noopener noreferrer">
+      {t.footer.docs}
+    </a>
+  </div>
+  <div data-slot="cell">
+    <a href={CHANGELOG_URL} target="_blank" rel="noopener noreferrer">
+      {t.footer.changelog}
+    </a>
+  </div>
+  <div data-slot="cell">
+    <a href={LICENSE_FILE_URL} target="_blank" rel="noopener noreferrer">
+      {t.footer.license} <span>[Apache-2.0]</span>
+    </a>
+  </div>
+</footer>
+
+<div data-component="legal">
+  <span>© {year} {COPYRIGHT_HOLDER}</span>
+  <a href={localePath(lang, "/brand")}>{t.footer.brand}</a>
+  <a href={localePath(lang, "/privacy")}>{t.footer.privacy}</a>
+  <a href={localePath(lang, "/contact")}>{t.footer.contact}</a>
+  <a href={LICENSE_FILE_URL} target="_blank" rel="noopener noreferrer">
+    {t.footer.license}
+  </a>
+  <details data-component="lang-picker">
+    <summary aria-label={t.footer.languageLabel}>
+      {LOCALE_LABELS[lang]}
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 12 12"
+        fill="none"
+        aria-hidden="true"
+        ><path
+          d="M2 4l4 4 4-4"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="square"></path></svg
+      >
+    </summary>
+    <ul>
+      {
+        LOCALES.map((locale) => (
+          <li>
+            <a
+              href={localePath(locale, pagePath)}
+              lang={LOCALE_TAGS[locale]}
+              hreflang={LOCALE_TAGS[locale]}
+              aria-current={locale === lang ? "true" : undefined}
+            >
+              {LOCALE_LABELS[locale]}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </details>
+</div>
+
+<script is:inline>
+  // Close the language picker when clicking outside of it.
+  for (const picker of document.querySelectorAll(
+    '[data-component="lang-picker"]',
+  )) {
+    document.addEventListener("click", (event) => {
+      if (picker.hasAttribute("open") && !picker.contains(event.target)) {
+        picker.removeAttribute("open");
+      }
+    });
+  }
+</script>

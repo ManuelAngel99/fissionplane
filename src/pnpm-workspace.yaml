@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - libs/typescript/*
+  - sdks/typescript
+
+onlyBuiltDependencies:
+  - esbuild
+  - oxc-resolver

@@ -1,0 +1,32 @@
+[package]
+name = "vm-host"
+description = "The privileged per-node daemon: owns every Firecracker process, per-sandbox networking, the node artifact cache, and the sandbox data-plane API (docs/components/vm-host.md)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+# Linked per docs/components/artifact-store.md (node artifact cache);
+# used when the manifest format lands.
+artifact-store = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true, features = [
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "signal",
+] }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+# The sealed vsock contract spoken to vm-steward inside every guest.
+vm-protocol = { workspace = true }
+
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }
+
+[lints]
+workspace = true

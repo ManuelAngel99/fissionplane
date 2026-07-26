@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/schema.gen.ts",
+    "sdks/typescript/**"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["./*", "../*"],
+            "message": "Use the package's @fissionplane/* alias instead of relative imports."
+          }
+        ]
+      }
+    ]
+  }
+}

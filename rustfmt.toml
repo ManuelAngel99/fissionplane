@@ -1,0 +1,9 @@
+# Stable-only options, so `cargo fmt` behaves identically for everyone on
+# the pinned toolchain. Unstable options (import granularity/grouping,
+# comment wrapping) are deliberately absent rather than silently ignored;
+# revisit when they stabilise.
+style_edition = "2024"
+newline_style = "Unix"
+use_field_init_shorthand = true
+use_try_shorthand = true
+match_block_trailing_comma = true

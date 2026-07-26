@@ -1,0 +1,610 @@
+# The sandbox data-plane document surface, served by vm-host through the
+# gateway at the sandbox's own hostname. This is a SEPARATE document from
+# src/contracts/openapi.yaml on purpose: the control plane is never on the sandbox
+# data path, so nothing here may move there (docs/components/gateway.md,
+# control-plane.md).
+#
+# Streaming operations are WebSocket upgrades described in
+# src/contracts/dataplane-streaming.md and hand-written in the SDKs.
+# This document carries their request/response counterparts.
+#
+# Base URL: https://<AGENT_PORT>-<sandbox-id>.<domain>, where AGENT_PORT
+# is the reserved data-plane management port (SDK default 50000). Every
+# request on this management surface carries a capability token. The
+# control plane rejects exposure records for this port; anonymous
+# exposure applies only to tenant application ports relayed to the guest.
+openapi: 3.0.3
+info:
+  title: fissionplane data plane
+  version: 0.1.0
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  description: |
+    Command execution, process management, and filesystem access inside
+    one sandbox. Served on the sandbox data path: available whenever the
+    sandbox is running, even when the control plane is not.
+
+servers:
+  - url: https://50000-sandboxid.sandboxes.example.com
+
+security:
+  - SandboxTokenAuth: []
+
+tags:
+  - name: commands
+    description: Run-to-completion command execution and process management.
+  - name: files
+    description: Filesystem metadata, mutation, upload, and download.
+
+paths:
+  /commands:
+    post:
+      tags: [commands]
+      operationId: runCommand
+      summary: Run a command to completion
+      description: |
+        Starts the command inside the sandbox and blocks until it exits
+        or the timeout elapses. Output is captured and returned in one
+        document, truncated at the advertised limit — for unbounded or
+        interactive output, use the streaming surface instead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunCommandRequest'
+      responses:
+        '200':
+          description: The command ran; `exit_code` reports how it ended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '408':
+          description: The command did not exit within `timeout_seconds`; it has been killed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: The per-sandbox concurrent-connection cap is reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /processes:
+    post:
+      tags: [commands]
+      operationId: startProcess
+      summary: Start a background process
+      description: |
+        Starts a supervised process and returns as soon as it has been
+        spawned. Attach to its WebSocket stream for live output, stdin,
+        signals, and PTY resize.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartProcessRequest'
+      responses:
+        '201':
+          description: The process was started.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Process'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+    get:
+      tags: [commands]
+      operationId: listProcesses
+      summary: List processes
+      description: Lists the processes the agent supervises inside the sandbox.
+      responses:
+        '200':
+          description: The supervised processes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /processes/{pid}:
+    parameters:
+      - name: pid
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      tags: [commands]
+      operationId: getProcess
+      summary: Get a process
+      responses:
+        '200':
+          description: The process.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Process'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [commands]
+      operationId: killProcess
+      summary: Signal a process
+      description: Sends `signal` to the process. The default is SIGTERM.
+      parameters:
+        - name: signal
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [SIGTERM, SIGKILL, SIGINT, SIGHUP]
+            default: SIGTERM
+      responses:
+        '204':
+          description: The signal is delivered.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /processes/{pid}/logs:
+    parameters:
+      - name: pid
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      - name: after
+        in: query
+        required: false
+        description: Return output after this sequence number.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+    get:
+      tags: [commands]
+      operationId: getProcessLogs
+      summary: Read buffered process output
+      description: |
+        Returns output currently retained in the process ring. Use the
+        WebSocket stream to follow new output.
+      responses:
+        '200':
+          description: Buffered output and process status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessLogs'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /files:
+    get:
+      tags: [files]
+      operationId: listFiles
+      summary: List a directory
+      parameters:
+        - $ref: '#/components/parameters/path'
+      responses:
+        '200':
+          description: The directory entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileList'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [files]
+      operationId: removeFile
+      summary: Remove a file or directory
+      parameters:
+        - $ref: '#/components/parameters/path'
+        - name: recursive
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: The path was removed.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /files/stat:
+    get:
+      tags: [files]
+      operationId: statFile
+      summary: Read file metadata
+      parameters:
+        - $ref: '#/components/parameters/path'
+      responses:
+        '200':
+          description: Metadata for the path.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileInfo'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /files/directories:
+    post:
+      tags: [files]
+      operationId: makeDirectory
+      summary: Create a directory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MakeDirectoryRequest'
+      responses:
+        '204':
+          description: The directory exists.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /files/move:
+    post:
+      tags: [files]
+      operationId: moveFile
+      summary: Move or rename a path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveFileRequest'
+      responses:
+        '204':
+          description: The path was moved.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /files/content:
+    get:
+      tags: [files]
+      operationId: downloadFile
+      summary: Download a file
+      parameters:
+        - $ref: '#/components/parameters/path'
+      responses:
+        '200':
+          description: The file bytes.
+          headers:
+            X-File-Mode:
+              schema:
+                type: string
+            X-File-Modified-At:
+              schema:
+                type: string
+                format: date-time
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [files]
+      operationId: uploadFile
+      summary: Upload a file
+      parameters:
+        - $ref: '#/components/parameters/path'
+        - name: mode
+          in: query
+          required: false
+          description: Unix permission bits in octal, for example `0644`.
+          schema:
+            type: string
+            pattern: '^[0-7]{3,4}$'
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '204':
+          description: The file was written atomically.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+components:
+  securitySchemes:
+    SandboxTokenAuth:
+      type: apiKey
+      in: header
+      name: X-Sandbox-Token
+      description: |
+        A capability token for this sandbox and epoch, minted by the
+        control plane. Verified by the gateway and again by the owning
+        node, which strips it before anything reaches the guest.
+
+  responses:
+    BadRequest:
+      description: The request is malformed or fails validation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: |
+        Missing, expired, or out-of-scope token, or a token minted
+        against a previous epoch.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The requested process or path does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: The requested mutation conflicts with an existing path.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TooManyRequests:
+      description: The per-sandbox concurrent-connection cap is reached.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  parameters:
+    path:
+      name: path
+      in: query
+      required: true
+      description: Absolute path or a path relative to the default user's home.
+      schema:
+        type: string
+        minLength: 1
+
+  schemas:
+    RunCommandRequest:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: string
+          description: The program to run.
+        args:
+          type: array
+          items:
+            type: string
+          maxItems: 256
+        cwd:
+          type: string
+          description: Working directory. Omitted means the default user's home.
+        env:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment variables set for this command only.
+        stdin:
+          type: string
+          description: Bytes written to the command's stdin before it is closed.
+        timeout_seconds:
+          type: integer
+          minimum: 1
+          description: |
+            Kill the command if it has not exited after this long.
+            Omitted means the agent's default.
+
+    CommandResult:
+      type: object
+      required: [exit_code, stdout, stderr]
+      properties:
+        exit_code:
+          type: integer
+          description: The command's exit code; negative means killed by a signal.
+        stdout:
+          type: string
+        stderr:
+          type: string
+        truncated:
+          type: boolean
+          description: |
+            True when output exceeded the capture limit. The streaming
+            surface has no such limit.
+
+    StartProcessRequest:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: string
+        args:
+          type: array
+          items:
+            type: string
+          maxItems: 256
+        cwd:
+          type: string
+        env:
+          type: object
+          additionalProperties:
+            type: string
+        pty:
+          $ref: '#/components/schemas/PtySize'
+
+    PtySize:
+      type: object
+      required: [cols, rows]
+      properties:
+        cols:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        rows:
+          type: integer
+          minimum: 1
+          maximum: 65535
+
+    Process:
+      type: object
+      required: [pid, command, started_at, running, pty]
+      properties:
+        pid:
+          type: integer
+        command:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        running:
+          type: boolean
+        pty:
+          type: boolean
+        exit_code:
+          type: integer
+          nullable: true
+        exited_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ProcessList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Process'
+
+    ProcessLogChunk:
+      type: object
+      required: [stream, sequence, data]
+      properties:
+        stream:
+          type: string
+          enum: [stdout, stderr]
+        sequence:
+          type: integer
+          minimum: 1
+        data:
+          type: string
+
+    ProcessLogs:
+      type: object
+      required: [chunks, next_sequence, running]
+      properties:
+        chunks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProcessLogChunk'
+        next_sequence:
+          type: integer
+          minimum: 0
+        running:
+          type: boolean
+        exit_code:
+          type: integer
+          nullable: true
+        truncated_before:
+          type: integer
+          minimum: 0
+
+    FileKind:
+      type: string
+      enum: [file, directory, symlink, other]
+
+    FileInfo:
+      type: object
+      required: [path, name, kind, size, mode, modified_at]
+      properties:
+        path:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: '#/components/schemas/FileKind'
+        size:
+          type: integer
+          minimum: 0
+        mode:
+          type: string
+          pattern: '^[0-7]{3,4}$'
+        modified_at:
+          type: string
+          format: date-time
+        target:
+          type: string
+          description: Symlink target; absent for other kinds.
+
+    FileList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileInfo'
+
+    MakeDirectoryRequest:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          minLength: 1
+        parents:
+          type: boolean
+          default: true
+        mode:
+          type: string
+          pattern: '^[0-7]{3,4}$'
+
+    MoveFileRequest:
+      type: object
+      required: [source, destination]
+      properties:
+        source:
+          type: string
+          minLength: 1
+        destination:
+          type: string
+          minLength: 1
+        overwrite:
+          type: boolean
+          default: false
+
+    Error:
+      type: object
+      description: The same error shape the control plane uses.
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+        request_id:
+          type: string

@@ -1,0 +1,98 @@
+/* Cookie banner. Fixed to the viewport, so it lives outside the page
+   container and carries the palette scope itself — see global.css. */
+
+[data-component='consent'] {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  background: var(--color-background);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+/* The layout below would otherwise defeat the hidden attribute. */
+[data-component='consent'][hidden] {
+  display: none;
+}
+
+/* Padding matches the page container, so the copy lines up with the page. */
+[data-slot='consent-inner'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 67.5rem;
+  margin: 0 auto;
+  padding: 20px 5rem;
+}
+
+@media (max-width: 60rem) {
+  [data-slot='consent-inner'] {
+    padding: 20px 1.5rem;
+  }
+}
+
+[data-slot='consent-copy'] {
+  flex: 1 1 24rem;
+}
+
+[data-slot='consent-copy'] strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--color-text-strong);
+  font-weight: 500;
+}
+
+[data-slot='consent-copy'] p {
+  line-height: 1.6;
+}
+
+[data-slot='consent-copy'] a {
+  color: var(--color-text-strong);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: var(--space-1);
+}
+
+[data-slot='consent-actions'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Accepting and declining are the same control in every respect but the
+   label: same size, same weight, same contrast. */
+[data-slot='consent-actions'] button {
+  padding: 8px 20px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-strong);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+[data-slot='consent-actions'] button:hover {
+  background: var(--color-background-weak);
+}
+
+[data-slot='consent-actions'] button:focus-visible {
+  outline: 1px solid var(--color-background-strong);
+  outline-offset: 2px;
+}
+
+@media (max-width: 30rem) {
+  [data-slot='consent-actions'] {
+    width: 100%;
+  }
+
+  [data-slot='consent-actions'] button {
+    flex: 1;
+  }
+}

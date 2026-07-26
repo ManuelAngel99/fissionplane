@@ -1,0 +1,13 @@
+[package]
+name = "vm-init"
+description = "PID 1 inside every sandbox: mounts, zombie reaping, supervision of vm-steward. Roughly 400 lines, never exits."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

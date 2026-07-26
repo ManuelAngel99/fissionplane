@@ -1,0 +1,4 @@
+-- Runs once, on first boot of a fresh postgres-data volume.
+-- No PostgreSQL extensions are currently required: canonical resource IDs
+-- are generated in application code with NanoID. Schemas and tables remain
+-- owned by their forward-only migrations.

@@ -1,0 +1,34 @@
+# FissionPlane
+
+> Open-source, self-hosted platform for secure sandboxes and serverless functions in isolated Firecracker microVMs.
+
+FissionPlane gives AI agents, code interpreters, developer tools, and CI systems a secure place to run model-generated or user-submitted code. It runs two workload types on one substrate. Sandboxes are stateful, interactive Linux environments with command, filesystem, network, and lifecycle controls. Functions are versioned deployments that start from warm snapshots, serve HTTPS or scheduled invocations, and scale to zero. The control plane, gateway, node runtime, guest programs, API contracts, and SDKs are open source under the Apache License 2.0. There is no required proprietary FissionPlane cloud service.
+
+## Site
+
+- [Home](https://fissionplane.dev/): Product overview, SDK install commands, architecture, and FAQ
+- [Brand](https://fissionplane.dev/brand): Brand guidelines with downloadable logo assets
+- [Privacy](https://fissionplane.dev/privacy): How the site uses analytics, and how to change your choice
+- [Documentation](https://fissionplane.dev/docs): Setup, architecture, and API guides
+- [GitHub repository](https://github.com/ManuelAngel99/fissionplane): Source code, issues, and contributions
+- [License](https://github.com/ManuelAngel99/fissionplane/blob/main/LICENSE): Apache License 2.0
+
+The site is available in English (/), Spanish (/es), German (/de), French (/fr), Japanese (/ja), and Simplified Chinese (/zh).
+
+## SDKs
+
+Install from the package registries; all SDKs share the same OpenAPI contracts.
+
+- TypeScript: `npm install @fissionplane/sdk`
+- Python: `pip install fissionplane`
+- Rust: `cargo add fissionplane`
+
+## Key facts
+
+- Hardware isolation via Firecracker microVMs (own kernel, filesystem, network namespace, and resource limits)
+- Two workload types on one substrate: interactive sandboxes and serverless functions
+- Stateful sandboxes: pause to object storage and resume memory, processes, and files
+- Functions: versioned deploys from OCI images, HTTPS or scheduled invocation, warm-snapshot starts, scale to zero, instant rollback
+- Kubernetes-native install with one Helm chart (no operator, no custom resources)
+- Fully self-hosted: you operate the control plane, data plane, and compute; air-gapped installs work
+- Workload traffic is not proxied through the control plane, so sandboxes and functions continue through a control-plane outage

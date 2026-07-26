@@ -1,0 +1,5 @@
+# https://fissionplane.dev/robots.txt
+User-agent: *
+Allow: /
+
+Sitemap: https://fissionplane.dev/sitemap-index.xml

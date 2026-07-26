@@ -1,0 +1,32 @@
+{
+  "name": "@fissionplane/console-api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./auth": "./src/auth.ts",
+    "./server": "./src/server.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@effect/platform": "latest",
+    "@fissionplane/api": "workspace:*",
+    "@fissionplane/core": "workspace:*",
+    "@fissionplane/db": "workspace:*",
+    "better-auth": "^1.6.23",
+    "effect": "latest",
+    "pg": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "latest",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

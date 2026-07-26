@@ -1,0 +1,13 @@
+# cargo-nextest configuration (Convex's CI profile shape). `just test`
+# runs the default profile locally; CI runs `cargo nextest run
+# --profile ci` so the same report semantics apply everywhere.
+
+[profile.ci]
+# Report every failure, not just the first.
+fail-fast = false
+status-level = "fail"
+final-status-level = "fail"
+failure-output = "immediate-final"
+
+[profile.ci.junit]
+path = "junit.xml"

@@ -1,0 +1,1140 @@
+# The control-plane REST contract. THIS DOCUMENT IS THE SOURCE OF TRUTH
+# for the management API surface (docs/components/control-plane.md, "The
+# API is specification-first"): the platform's types, and the Python and
+# TypeScript client cores, are generated from it. Generated code is never
+# edited by hand, and CI fails if regenerating produces a diff.
+#
+# Deliberately absent:
+#   - The lifecycle event stream. OpenAPI describes request/response
+#     documents, not unbounded frame sequences; the streaming surface is
+#     hand-written and kept small, per the control-plane document.
+#   - Data-plane operations (processes, filesystem, PTYs, port traffic).
+#     Those run through gateway to vm-host on the sandbox data path and
+#     never appear on the control plane.
+#
+# Conventions:
+#   - Tenant-visible sandbox states are exactly: running, paused,
+#     terminated, failed. Transitional states are internal and collapse
+#     onto the state the transition started from.
+#   - Every list is paginated (cursor + limit). Nothing unbounded.
+#   - Errors share one schema; `code` is machine-readable and part of
+#     the contract, `retryable` answers the caller's next line of code.
+#   - An unauthenticated caller receives an identical 401 whether or not
+#     the sandbox exists (non-enumeration).
+openapi: 3.0.3
+info:
+  title: fissionplane control plane
+  version: 0.1.0
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  description: |
+    Management API for sandboxes and templates. Off the sandbox data
+    path: if this API is down, running sandboxes keep serving traffic —
+    only lifecycle operations stop.
+
+    Every response carries an `X-Request-Id` header (accepted from the
+    client if supplied and well-formed, generated otherwise) that links
+    the API call to the node operation that served it.
+
+servers:
+  - url: https://api.example.com
+
+security:
+  - ApiKeyAuth: []
+  - BearerAuth: []
+
+tags:
+  - name: sandboxes
+    description: Sandbox lifecycle and credentials.
+  - name: ports
+    description: >
+      Published-port exposure records. Every port defaults to private
+      (capability token required); public exposure is an explicit,
+      durable, audited opt-in. The reserved sandbox agent port is never
+      eligible for an exposure record.
+  - name: templates
+    description: The template registry and template builds.
+
+paths:
+  /v1/sandboxes:
+    get:
+      tags: [sandboxes]
+      operationId: listSandboxes
+      summary: List sandboxes
+      description: |
+        Lists the organisation's sandboxes, most recently created first.
+        Filterable by state, name, and tenant metadata.
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+        - name: state
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/SandboxState'
+        - name: name
+          in: query
+          required: false
+          description: Exact match on the tenant-assigned name.
+          schema:
+            $ref: '#/components/schemas/SandboxName'
+        - name: metadata
+          in: query
+          required: false
+          description: |
+            Metadata filter: URL-encoded `key=value` pairs joined with
+            `&` (for example `run%3D42%26user%3Dalice`). A sandbox
+            matches when every pair matches.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One page of sandboxes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxList'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+    post:
+      tags: [sandboxes]
+      operationId: createSandbox
+      summary: Create a sandbox
+      description: |
+        Synchronous: the call blocks until a node has acknowledged the
+        sandbox, and returns a usable sandbox — identifier, domain, and
+        capability token — or an error.
+
+        Supply `Idempotency-Key` to make retries safe: a retry with the
+        same key returns the sandbox the first attempt created rather
+        than creating a second one.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Idempotency key for safe retries of the create.
+          schema:
+            type: string
+            maxLength: 255
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSandboxRequest'
+      responses:
+        '201':
+          description: The sandbox is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxWithToken'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: The template does not exist or is not visible to this organisation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: A sandbox with the requested name already exists in this organisation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503':
+          description: No node could serve the create within its deadline. Retryable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/sandboxes/{sandboxId}:
+    parameters:
+      - $ref: '#/components/parameters/sandboxId'
+    get:
+      tags: [sandboxes]
+      operationId: getSandbox
+      summary: Get a sandbox
+      responses:
+        '200':
+          description: The sandbox.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sandbox'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [sandboxes]
+      operationId: deleteSandbox
+      summary: Delete a sandbox
+      description: |
+        Terminates the sandbox. Deleting a paused sandbox also releases
+        its snapshot. Terminal states are retained as records: the
+        sandbox remains readable as `terminated`.
+      responses:
+        '204':
+          description: The sandbox is terminated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/sandboxes/{sandboxId}/pause:
+    parameters:
+      - $ref: '#/components/parameters/sandboxId'
+    post:
+      tags: [sandboxes]
+      operationId: pauseSandbox
+      summary: Pause a sandbox
+      description: |
+        Snapshots the sandbox and releases its node capacity. Complete
+        when the node reports the VM snapshotted; the snapshot's upload
+        continues in the background, and `restorable_until` on the
+        returned sandbox records how long the snapshot stays restorable.
+      responses:
+        '200':
+          description: The sandbox is paused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sandbox'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/sandboxes/{sandboxId}/resume:
+    parameters:
+      - $ref: '#/components/parameters/sandboxId'
+    post:
+      tags: [sandboxes]
+      operationId: resumeSandbox
+      summary: Resume a paused sandbox
+      description: |
+        Restores the snapshot onto a node. The resumed instance carries a
+        **new epoch**: capability tokens minted against the previous
+        instance fail closed, which is why this operation returns a fresh
+        token alongside the sandbox.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResumeSandboxRequest'
+      responses:
+        '200':
+          description: The sandbox is running again, under a new epoch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxWithToken'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410':
+          description: The snapshot is no longer restorable (expired or its upload was abandoned).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503':
+          description: No node could serve the resume within its deadline. Retryable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/sandboxes/{sandboxId}/deadline:
+    parameters:
+      - $ref: '#/components/parameters/sandboxId'
+    post:
+      tags: [sandboxes]
+      operationId: extendSandboxDeadline
+      summary: Extend a sandbox's deadline
+      description: |
+        Sets the sandbox's deadline to now plus `deadline_seconds`,
+        bounded by the installation's maximum lease. The deadline is
+        recorded here and enforced by the node.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtendDeadlineRequest'
+      responses:
+        '200':
+          description: The sandbox with its new deadline.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sandbox'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/sandboxes/{sandboxId}/token:
+    parameters:
+      - $ref: '#/components/parameters/sandboxId'
+    post:
+      tags: [sandboxes]
+      operationId: mintSandboxToken
+      summary: Mint a capability token
+      description: |
+        Mints a capability token for the sandbox's current epoch. Every
+        token carries the sandbox ID, the epoch, a scope, and a short
+        expiry; there is no long-lived or unscoped credential. A scope
+        can only narrow what the caller's own credential permits —
+        request specific ports to mint an attenuated token suitable for
+        a browser one-time link.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MintTokenRequest'
+      responses:
+        '201':
+          description: A fresh capability token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityToken'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/sandboxes/{sandboxId}/ports:
+    parameters:
+      - $ref: '#/components/parameters/sandboxId'
+    get:
+      tags: [ports]
+      operationId: listPorts
+      summary: List port exposure records
+      description: |
+        Lists the sandbox's exposure records. A port with no record is
+        private: reachable at its hostname with a capability token, like
+        every other port. Records exist to make exposure explicit,
+        durable, and auditable.
+      responses:
+        '200':
+          description: The sandbox's exposure records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/sandboxes/{sandboxId}/ports/{port}:
+    parameters:
+      - $ref: '#/components/parameters/sandboxId'
+      - name: port
+        in: path
+        required: true
+        description: |
+          Tenant application port. The configured sandbox agent port
+          (SDK default 50000) is reserved and cannot be exposed.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 65535
+    put:
+      tags: [ports]
+      operationId: exposePort
+      summary: Set a port's exposure
+      description: |
+        Records the port's exposure. `public` admits anonymous traffic
+        to this one port — an explicit per-sandbox opt-in, recorded
+        durably, visible in audit, and defaulting off. `private` records
+        the port without widening access. Capability-token scope governs
+        authenticated access and is independent of the public exposure
+        record. Idempotent: repeating a `PUT` re-asserts the record.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExposePortRequest'
+      responses:
+        '200':
+          description: The exposure record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortExposure'
+        '400':
+          description: |
+            The request is malformed, or `port` is reserved for the
+            sandbox agent and cannot have an exposure record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [ports]
+      operationId: unexposePort
+      summary: Remove a port's exposure record
+      description: |
+        Deletes the record, returning the port to the default: private,
+        capability token required. Public traffic to the port stops.
+      responses:
+        '204':
+          description: The record is removed.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/templates:
+    get:
+      tags: [templates]
+      operationId: listTemplates
+      summary: List templates
+      description: Lists templates visible to the organisation.
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: One page of templates.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/templates/{template}:
+    parameters:
+      - name: template
+        in: path
+        required: true
+        description: A template alias or template ID.
+        schema:
+          $ref: '#/components/schemas/TemplateAlias'
+    get:
+      tags: [templates]
+      operationId: getTemplate
+      summary: Get a template
+      description: |
+        Resolves an alias to its current record. Aliases are mutable;
+        the artifact a sandbox is created from is resolved at admission
+        time, so reading a template and creating from it can observe
+        different artifacts if the alias is re-pointed in between.
+      responses:
+        '200':
+          description: The template.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [templates]
+      operationId: deleteTemplate
+      summary: Delete a template
+      description: |
+        Retires the template record and its alias. The underlying
+        artifact's bytes are dropped by the collector once nothing
+        references them; existing sandboxes created from the artifact
+        are unaffected.
+      responses:
+        '204':
+          description: The template is deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The template is referenced by an in-progress build.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/templates/builds:
+    post:
+      tags: [templates]
+      operationId: createTemplateBuild
+      summary: Start a template build
+      description: |
+        Builds a template from an OCI image reference and a recipe. The
+        image tag is resolved to an immutable digest when the build
+        starts and never consulted again. The build is asynchronous:
+        poll the build with `getTemplateBuild`, tail its output with
+        `getTemplateBuildLogs`. On success the returned template alias,
+        if one was requested, is pointed at the new artifact atomically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTemplateBuildRequest'
+      responses:
+        '201':
+          description: The build is queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateBuild'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /v1/templates/builds/{buildId}:
+    parameters:
+      - $ref: '#/components/parameters/buildId'
+    get:
+      tags: [templates]
+      operationId: getTemplateBuild
+      summary: Get a template build
+      responses:
+        '200':
+          description: The build.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateBuild'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/templates/builds/{buildId}/logs:
+    parameters:
+      - $ref: '#/components/parameters/buildId'
+    get:
+      tags: [templates]
+      operationId: getTemplateBuildLogs
+      summary: Read build logs
+      description: |
+        Returns log entries starting at `offset`. Poll with the returned
+        `next_offset` until the build reaches a terminal status; a call
+        at the current end returns an empty page, not an error.
+      parameters:
+        - name: offset
+          in: query
+          required: false
+          description: Entry offset from which to read.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: One page of log entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateBuildLogs'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Organisation API key.
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: OIDC bearer token.
+
+  parameters:
+    sandboxId:
+      name: sandboxId
+      in: path
+      required: true
+      description: |
+        The 24-character lowercase-alphanumeric NanoID. It is also a
+        hostname label component, so the alphabet excludes the hyphen,
+        which is the hostname label's field separator.
+      schema:
+        $ref: '#/components/schemas/NanoId'
+    buildId:
+      name: buildId
+      in: path
+      required: true
+      description: The template build identifier.
+      schema:
+        $ref: '#/components/schemas/NanoId'
+    limit:
+      name: limit
+      in: query
+      required: false
+      description: Page size.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor from a previous page's `next_cursor`.
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: The request is malformed or fails validation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: |
+        Missing, malformed, or expired credential. Returned identically
+        whether or not the addressed resource exists.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The credential is valid but does not permit this operation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: No such resource, for an authenticated caller.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: |
+        Another lifecycle operation holds the mutex, or the sandbox's
+        current state does not permit this operation (for example,
+        pausing a sandbox that is already paused). Not retryable as-is;
+        re-read the sandbox and decide.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TooManyRequests:
+      description: A quota or rate limit binds. `code` distinguishes which.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    NanoId:
+      type: string
+      description: |
+        Canonical FissionPlane resource identifier: 24 characters from the
+        lowercase alphanumeric NanoID alphabet (approximately 124 bits of
+        entropy). IDs owned by external systems and content digests use their
+        own schemas instead.
+      pattern: '^[a-z0-9]{24}$'
+      minLength: 24
+      maxLength: 24
+
+    SandboxName:
+      type: string
+      description: Tenant-assigned sandbox name, unique within an organisation.
+      pattern: '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$'
+      minLength: 1
+      maxLength: 63
+
+    TemplateAlias:
+      type: string
+      description: Mutable, human-readable template alias.
+      pattern: '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$'
+      minLength: 1
+      maxLength: 63
+
+    ResourceDescription:
+      type: string
+      description: Trimmed human-readable resource description.
+      minLength: 1
+      maxLength: 2000
+
+    ArtifactId:
+      type: string
+      description: Immutable lowercase SHA-256 content digest.
+      pattern: '^sha256:[a-f0-9]{64}$'
+      minLength: 71
+      maxLength: 71
+
+    SandboxState:
+      type: string
+      description: |
+        The tenant-visible states — exactly these four. Transitional
+        states are internal: a pausing sandbox reads as `running`, a
+        resuming one as `paused`.
+      enum: [running, paused, terminated, failed]
+
+    FailureReason:
+      type: string
+      description: Enumerated cause recorded when a sandbox ends as `failed`.
+      enum:
+        - node_lost
+        - restore_failed
+        - deadline_expired
+        - drained_without_capture
+        - never_acknowledged
+        - snapshot_upload_abandoned
+        - snapshot_expired
+
+    SandboxFailure:
+      type: object
+      description: Present exactly when `state` is `failed`.
+      required: [reason, recoverable]
+      properties:
+        reason:
+          $ref: '#/components/schemas/FailureReason'
+        detail:
+          type: string
+          description: Free text expanding on the reason.
+        recoverable:
+          type: boolean
+          description: Whether issuing the failed request again would plausibly work.
+
+    EgressPolicy:
+      type: object
+      description: |
+        Egress allow and deny lists, fixed at create: policy is part of
+        the sandbox's identity, not mutable state a caller can widen
+        after the occupant is running. Entries are hostnames or CIDR
+        blocks; deny takes precedence.
+      properties:
+        allow:
+          type: array
+          items:
+            type: string
+          maxItems: 256
+        deny:
+          type: array
+          items:
+            type: string
+          maxItems: 256
+
+    Resources:
+      type: object
+      description: The compute shape, set by the template artifact.
+      required: [vcpus, mem_mib]
+      properties:
+        vcpus:
+          type: integer
+          minimum: 1
+        mem_mib:
+          type: integer
+          minimum: 128
+
+    Sandbox:
+      type: object
+      required:
+        - sandbox_id
+        - state
+        - template_artifact_id
+        - epoch
+        - domain
+        - created_at
+        - deadline
+        - resources
+        - metadata
+      properties:
+        sandbox_id:
+          $ref: '#/components/schemas/NanoId'
+        name:
+          type: string
+          allOf:
+            - $ref: '#/components/schemas/SandboxName'
+          nullable: true
+          description: Optional tenant-assigned name, unique within the organisation.
+        state:
+          $ref: '#/components/schemas/SandboxState'
+        failure:
+          # Present exactly when `state` is `failed`; absent otherwise.
+          allOf:
+            - $ref: '#/components/schemas/SandboxFailure'
+        template_artifact_id:
+          type: string
+          allOf:
+            - $ref: '#/components/schemas/ArtifactId'
+          description: The immutable artifact the sandbox was created from, resolved at admission time.
+        template:
+          type: string
+          nullable: true
+          description: The template alias the create named, if it named one.
+        epoch:
+          type: integer
+          format: int64
+          description: |
+            The instance generation. Advances on every resume and
+            checkpoint; tokens are minted against an epoch and fail
+            closed when it moves.
+        domain:
+          type: string
+          description: |
+            The sandbox domain suffix. A published port `p` is reachable
+            at `https://<p>-<sandbox_id>.<domain>`.
+        created_at:
+          type: string
+          format: date-time
+        deadline:
+          type: string
+          format: date-time
+          description: When the lease expires. Recorded here, enforced by the node.
+        restorable_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Paused sandboxes only: the time past which the snapshot is no
+            longer restorable. The platform refreshes ageing snapshots by
+            default; this bound is what a caller sees if it cannot.
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Tenant key-value metadata, filterable in list.
+        egress:
+          # Absent when the sandbox was created without an egress policy.
+          allOf:
+            - $ref: '#/components/schemas/EgressPolicy'
+        resources:
+          $ref: '#/components/schemas/Resources'
+
+    SandboxList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sandbox'
+        next_cursor:
+          type: string
+          nullable: true
+          description: Cursor for the next page; absent or null on the last page.
+
+    CreateSandboxRequest:
+      type: object
+      required: [template]
+      properties:
+        template:
+          type: string
+          description: A template alias or artifact ID. Aliases resolve at admission time.
+        name:
+          allOf:
+            - $ref: '#/components/schemas/SandboxName'
+          description: |
+            Optional name, unique within the organisation. A colliding
+            create fails with 409 instead of quietly producing a second
+            sandbox — idempotency for callers with a natural key.
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Tenant key-value metadata, indexed for list filtering.
+        deadline_seconds:
+          type: integer
+          minimum: 1
+          description: |
+            Requested lease length, from now. Bounded by the
+            installation's maximum; omitted means the default lease.
+        egress:
+          $ref: '#/components/schemas/EgressPolicy'
+
+    ResumeSandboxRequest:
+      type: object
+      properties:
+        deadline_seconds:
+          type: integer
+          minimum: 1
+          description: Lease for the resumed instance, from now. Omitted means the default lease.
+
+    ExtendDeadlineRequest:
+      type: object
+      required: [deadline_seconds]
+      properties:
+        deadline_seconds:
+          type: integer
+          minimum: 1
+          description: The new lease length, measured from now.
+
+    MintTokenRequest:
+      type: object
+      properties:
+        ttl_seconds:
+          type: integer
+          minimum: 1
+          description: Requested token lifetime, bounded by the installation's maximum.
+        ports:
+          type: array
+          description: |
+            Restrict the token to these ports. Omitted means the full
+            scope the caller's credential permits; a scope can only
+            narrow, never widen.
+          items:
+            type: integer
+            minimum: 1
+            maximum: 65535
+          maxItems: 16
+
+    CapabilityToken:
+      type: object
+      required: [token, expires_at, epoch]
+      properties:
+        token:
+          type: string
+          description: |
+            The bearer credential for the sandbox data plane. Carries
+            the sandbox ID, epoch, scope, and expiry; verified by the
+            gateway and again by the owning node. Never logged.
+        expires_at:
+          type: string
+          format: date-time
+        epoch:
+          type: integer
+          format: int64
+          description: The epoch the token was minted against.
+        ports:
+          type: array
+          nullable: true
+          description: The port scope, when narrowed. Null means the full scope.
+          items:
+            type: integer
+
+    SandboxWithToken:
+      type: object
+      description: A sandbox together with a capability token for its current epoch.
+      required: [sandbox, token]
+      properties:
+        sandbox:
+          $ref: '#/components/schemas/Sandbox'
+        token:
+          $ref: '#/components/schemas/CapabilityToken'
+
+    PortVisibility:
+      type: string
+      description: |
+        `private`: reachable at the port's hostname with a capability
+        token whose scope permits it — the default for every port.
+        `public`: anonymous traffic is admitted to this one tenant
+        application port. Reserved platform ports can never be public.
+      enum: [private, public]
+
+    PortExposure:
+      type: object
+      required: [port, visibility, url]
+      properties:
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        visibility:
+          $ref: '#/components/schemas/PortVisibility'
+        url:
+          type: string
+          description: The port's public URL, `https://<port>-<sandbox_id>.<domain>`.
+
+    ExposePortRequest:
+      type: object
+      required: [visibility]
+      properties:
+        visibility:
+          $ref: '#/components/schemas/PortVisibility'
+
+    PortList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortExposure'
+
+    BuildStep:
+      type: object
+      description: One recipe step, executed in order inside the build VM.
+      required: [command]
+      properties:
+        command:
+          type: string
+          description: The command the step runs.
+        env:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment for this step only.
+
+    CreateTemplateBuildRequest:
+      type: object
+      required: [image]
+      properties:
+        image:
+          type: string
+          description: |
+            OCI image reference. A tag is resolved to an immutable
+            digest when the build starts and never consulted again.
+        alias:
+          type: string
+          allOf:
+            - $ref: '#/components/schemas/TemplateAlias'
+          description: |
+            Template alias to point at the artifact when the build
+            succeeds. Re-pointed atomically; sandboxes created from the
+            alias mid-build keep resolving to the previous artifact.
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/BuildStep'
+          maxItems: 128
+        start_command:
+          type: string
+          description: Command started at boot, before the warm snapshot is captured.
+        ready_command:
+          type: string
+          description: |
+            Readiness probe the warm-up waits for before capture. The
+            captured memory image contains the environment already past
+            this point, which is what a resume restores.
+        resources:
+          $ref: '#/components/schemas/Resources'
+
+    TemplateBuildStatus:
+      type: string
+      description: |
+        `queued` and `building` are in progress; `succeeded` and
+        `failed` are terminal.
+      enum: [queued, building, succeeded, failed]
+
+    TemplateBuild:
+      type: object
+      required: [build_id, status, image, created_at]
+      properties:
+        build_id:
+          $ref: '#/components/schemas/NanoId'
+        status:
+          $ref: '#/components/schemas/TemplateBuildStatus'
+        image:
+          type: string
+          description: The image reference as requested.
+        image_digest:
+          type: string
+          allOf:
+            - $ref: '#/components/schemas/ArtifactId'
+          nullable: true
+          description: The resolved immutable digest, once resolution has happened.
+        alias:
+          type: string
+          allOf:
+            - $ref: '#/components/schemas/TemplateAlias'
+          nullable: true
+        artifact_id:
+          type: string
+          allOf:
+            - $ref: '#/components/schemas/ArtifactId'
+          nullable: true
+          description: The produced template artifact; present once the build succeeds.
+        error:
+          type: string
+          nullable: true
+          description: What failed; present exactly when `status` is `failed`.
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    TemplateBuildLogEntry:
+      type: object
+      required: [timestamp, message]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        message:
+          type: string
+
+    TemplateBuildLogs:
+      type: object
+      required: [entries, next_offset]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/TemplateBuildLogEntry'
+        next_offset:
+          type: integer
+          description: Pass as `offset` on the next poll.
+
+    Template:
+      type: object
+      required: [template_id, artifact_id, created_at]
+      properties:
+        template_id:
+          $ref: '#/components/schemas/NanoId'
+        alias:
+          type: string
+          allOf:
+            - $ref: '#/components/schemas/TemplateAlias'
+          nullable: true
+          description: The mutable name pointing at the current artifact, if one is set.
+        artifact_id:
+          type: string
+          allOf:
+            - $ref: '#/components/schemas/ArtifactId'
+          description: The immutable artifact the alias currently resolves to.
+        description:
+          type: string
+          allOf:
+            - $ref: '#/components/schemas/ResourceDescription'
+          nullable: true
+        resources:
+          $ref: '#/components/schemas/Resources'
+        created_at:
+          type: string
+          format: date-time
+
+    TemplateList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Template'
+        next_cursor:
+          type: string
+          nullable: true
+
+    Error:
+      type: object
+      description: The one error shape every non-2xx response carries.
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: |
+            Machine-readable cause, stable across releases. Examples:
+            `invalid_request`, `unauthenticated`, `forbidden`,
+            `not_found`, `name_taken`, `lifecycle_conflict`,
+            `quota_exceeded`, `rate_limited`, `snapshot_expired`,
+            `no_capacity`.
+        message:
+          type: string
+          description: Human-readable detail. Never contains credentials.
+        retryable:
+          type: boolean
+          description: Whether issuing the same request again would plausibly work.
+        request_id:
+          type: string
+          description: The request identifier, for correlating with support and audit.

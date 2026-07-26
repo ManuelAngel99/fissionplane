@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "fissionplane-marketing-site",
+  "main": "./worker/index.ts",
+  // Set this to today's date
+  "compatibility_date": "2026-07-29",
+  // No workers.dev or preview URLs: they would serve indexable duplicates of
+  // the site. fissionplane.dev is the only canonical host; www 301s to it
+  // via a zone Redirect Rule (Rules → Redirect Rules).
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/docs",
+      "/docs/*",
+      "/mintlify-assets/*",
+      "/_mintlify/*",
+    ],
+    // Prefer a single canonical HTML path (avoids slash/no-slash duplicates).
+    "html_handling": "drop-trailing-slash",
+    "not_found_handling": "404-page",
+  },
+  "routes": [{ "pattern": "fissionplane.dev", "custom_domain": true }],
+  // Workers Logs + traces in the Cloudflare observability dashboard.
+  // No third-party analytics IDs required. Sampling stays at 100% while traffic
+  // is low; lower head_sampling_rate if log volume becomes costly.
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true,
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+    },
+  },
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@fissionplane/workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "pnpm --recursive --if-present build",
+    "dev:console": "pnpm --parallel --filter @fissionplane/console-api --filter @fissionplane/console-web dev",
+    "dev:backoffice": "pnpm --parallel --filter @fissionplane/backoffice-api --filter @fissionplane/backoffice-web dev",
+    "dev:marketing": "pnpm --filter @fissionplane/marketing-site dev",
+    "deploy:marketing": "pnpm --filter @fissionplane/marketing-site cf:deploy",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --type-aware apps libs/typescript",
+    "typecheck": "pnpm --recursive --if-present typecheck",
+    "test": "pnpm --recursive --if-present test",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "oxfmt": "^0.61.0",
+    "oxlint": "^1.76.0",
+    "oxlint-tsgolint": "latest",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

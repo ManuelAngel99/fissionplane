@@ -1,0 +1,25 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-sera",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/index.css",
+    "baseColor": "mist",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "phosphor",
+  "rtl": false,
+  "aliases": {
+    "components": "@fissionplane/console-web/components",
+    "utils": "@fissionplane/console-web/lib/utils",
+    "ui": "@fissionplane/console-web/components/ui",
+    "lib": "@fissionplane/console-web/lib",
+    "hooks": "@fissionplane/console-web/hooks"
+  },
+  "menuColor": "inverted",
+  "menuAccent": "subtle",
+  "registries": {}
+}

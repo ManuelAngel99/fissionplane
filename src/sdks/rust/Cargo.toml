@@ -1,0 +1,33 @@
+[package]
+name = "fissionplane"
+description = "Rust SDK for the fissionplane control plane and sandbox data plane."
+readme = "README.md"
+version = "0.0.1-beta"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository = "https://github.com/ManuelAngel99/fissionplane"
+homepage = "https://github.com/ManuelAngel99/fissionplane"
+publish = true
+
+[dependencies]
+futures-util = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tokio-tungstenite = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread"] }
+# Only to assert that the crate's own `tracing` events are emitted; the
+# SDK never installs a subscriber itself.
+tracing-subscriber = { workspace = true }
+wiremock = { workspace = true }
+
+[lints]
+workspace = true

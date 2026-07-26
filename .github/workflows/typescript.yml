@@ -1,0 +1,56 @@
+name: TypeScript
+
+on:
+  pull_request:
+    paths:
+      - "src/apps/backoffice-api/**"
+      - "src/apps/backoffice-web/**"
+      - "src/apps/console-api/**"
+      - "src/apps/console-web/**"
+      - "src/libs/typescript/**"
+      - "src/package.json"
+      - "src/pnpm-lock.yaml"
+      - "src/pnpm-workspace.yaml"
+      - "src/tsconfig.base.json"
+      - "src/.oxlintrc.json"
+      - "src/.oxfmtrc.json"
+      - ".github/workflows/typescript.yml"
+      - "justfile"
+  push:
+    branches: [main]
+    paths:
+      - "src/apps/backoffice-api/**"
+      - "src/apps/backoffice-web/**"
+      - "src/apps/console-api/**"
+      - "src/apps/console-web/**"
+      - "src/libs/typescript/**"
+      - "src/package.json"
+      - "src/pnpm-lock.yaml"
+      - "src/pnpm-workspace.yaml"
+      - "src/tsconfig.base.json"
+      - "src/.oxlintrc.json"
+      - "src/.oxfmtrc.json"
+      - ".github/workflows/typescript.yml"
+      - "justfile"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: src/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check

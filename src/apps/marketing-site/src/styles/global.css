@@ -1,0 +1,180 @@
+/* Design tokens and reset. Palette and structure follow the warm-grayscale
+   system used across FissionPlane brand assets. */
+
+:root {
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: var(--font-mono);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-4: 16px;
+
+  color-scheme: light dark;
+}
+
+/* The cookie banner is fixed to the viewport, outside the page container, so
+   it needs the palette declared on it directly. */
+[data-page='fissionplane'],
+[data-component='consent'] {
+  --color-background: hsl(0, 20%, 99%);
+  --color-background-weak: hsl(0, 8%, 97%);
+  --color-background-weak-hover: hsl(0, 8%, 94%);
+  --color-background-strong: hsl(0, 5%, 12%);
+  --color-background-strong-hover: hsl(0, 5%, 18%);
+  --color-background-interactive: hsl(62, 84%, 88%);
+  --color-background-interactive-weaker: hsl(64, 74%, 95%);
+
+  --color-text: hsl(0, 1%, 39%);
+  --color-text-weak: hsl(0, 1%, 60%);
+  --color-text-weaker: hsl(30, 2%, 81%);
+  --color-text-strong: hsl(0, 5%, 12%);
+  --color-text-inverted: hsl(0, 20%, 99%);
+
+  --color-border: hsl(30, 2%, 81%);
+  --color-border-weak: hsla(0, 100%, 3%, 0.12);
+
+  --color-danger: hsl(8, 72%, 46%);
+
+  --color-icon: hsl(0, 1%, 55%);
+
+  /* Syntax highlighting tokens for code examples. */
+  --syntax-keyword: #0099ff;
+  --syntax-string: #8855ff;
+  --syntax-definition: #d97706;
+  --syntax-property: #0fa3a3;
+  --syntax-static: #e8603c;
+  --syntax-punctuation: #999999;
+  --syntax-comment: var(--color-text-weak);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-page='fissionplane'],
+  [data-component='consent'] {
+    --color-background: hsl(0, 9%, 7%);
+    --color-background-weak: hsl(0, 6%, 10%);
+    --color-background-weak-hover: hsl(0, 6%, 15%);
+    --color-background-strong: hsl(0, 15%, 94%);
+    --color-background-strong-hover: hsl(0, 15%, 97%);
+    --color-background-interactive: hsl(62, 100%, 90%);
+    --color-background-interactive-weaker: hsl(60, 20%, 8%);
+
+    --color-text: hsl(0, 4%, 71%);
+    --color-text-weak: hsl(0, 2%, 49%);
+    --color-text-weaker: hsl(0, 3%, 28%);
+    --color-text-strong: hsl(0, 15%, 94%);
+    --color-text-inverted: hsl(0, 9%, 7%);
+
+    --color-border: hsl(0, 3%, 28%);
+    --color-border-weak: hsl(0, 4%, 23%);
+
+    --color-danger: hsl(8, 78%, 62%);
+
+    --color-icon: hsl(10, 3%, 43%);
+
+    --syntax-keyword: #00bbff;
+    --syntax-string: #bb88ff;
+    --syntax-definition: #ffcc66;
+    --syntax-property: #77dddd;
+    --syntax-static: #ff8866;
+    --syntax-punctuation: #999999;
+    --syntax-comment: var(--color-text-weak);
+  }
+}
+
+::selection {
+  background: var(--color-background-interactive);
+  color: var(--color-text-inverted);
+}
+
+@media (prefers-color-scheme: light) {
+  ::selection {
+    color: var(--color-text-strong);
+  }
+}
+
+/* Reset (after modern-normalize) */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+/* No rubber-band bounce past the document edges, and no pull-to-refresh. */
+html {
+  overscroll-behavior: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    interpolate-size: allow-keywords;
+  }
+}
+
+body {
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeSpeed;
+  font-synthesis: none;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  overflow-wrap: break-word;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  text-wrap: balance;
+}
+
+#root,
+#__next {
+  isolation: isolate;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

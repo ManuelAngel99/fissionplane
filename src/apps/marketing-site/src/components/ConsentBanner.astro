@@ -1,0 +1,172 @@
+---
+import type { Dictionary } from "../i18n";
+import { localePath, type Locale } from "../i18n";
+
+interface Props {
+  lang: Locale;
+  t: Dictionary;
+}
+
+const { lang, t } = Astro.props;
+---
+
+{/* Hidden until the script confirms nobody has answered yet, so returning
+    visitors never see it flash. Without JavaScript no beacon can load, so
+    there is nothing to ask about and the banner stays hidden. */}
+<aside data-component="consent" aria-label={t.consent.regionLabel} hidden>
+  <div data-slot="consent-inner">
+    <div data-slot="consent-copy">
+      <strong>{t.consent.heading}</strong>
+      <p>
+        {t.consent.body}{" "}
+        <a href={localePath(lang, "/privacy")}>{t.consent.learnMore}</a>
+      </p>
+    </div>
+    {/* Refusing is one click, in the same shape and weight as accepting. */}
+    <div data-slot="consent-actions">
+      <button type="button" data-consent-action="decline">
+        {t.consent.decline}
+      </button>
+      <button type="button" data-consent-action="allow">
+        {t.consent.allow}
+      </button>
+    </div>
+  </div>
+</aside>
+
+<script>
+  import {
+    CF_BEACON_SRC,
+    CF_BEACON_TOKEN,
+    CONSENT_DENIED,
+    CONSENT_GRANTED,
+    CONSENT_STORAGE_KEY,
+  } from "../lib/analytics";
+
+  type Choice = typeof CONSENT_GRANTED | typeof CONSENT_DENIED;
+  /** `signalled` is the browser refusing on the visitor's behalf. */
+  type State = Choice | "unset" | "signalled";
+
+  /** Which localized status line a state maps to on the privacy page. */
+  const STATUS_ATTRIBUTE: Record<State, string> = {
+    [CONSENT_GRANTED]: "statusAllowed",
+    [CONSENT_DENIED]: "statusDeclined",
+    unset: "statusUndecided",
+    signalled: "statusSignalled",
+  };
+
+  const banner = document.querySelector<HTMLElement>(
+    '[data-component="consent"]',
+  );
+
+  /** Browsers asking not to be tracked are never measured and never asked. */
+  function browserRefuses(): boolean {
+    const gpc = (navigator as Navigator & { globalPrivacyControl?: boolean })
+      .globalPrivacyControl;
+    return gpc === true || navigator.doNotTrack === "1";
+  }
+
+  function readChoice(): Choice | null {
+    try {
+      const stored = localStorage.getItem(CONSENT_STORAGE_KEY);
+      return stored === CONSENT_GRANTED || stored === CONSENT_DENIED
+        ? stored
+        : null;
+    } catch {
+      // Private browsing modes throw on access. Treat it as no answer.
+      return null;
+    }
+  }
+
+  function writeChoice(choice: Choice): void {
+    try {
+      localStorage.setItem(CONSENT_STORAGE_KEY, choice);
+    } catch {
+      // Nothing to persist to; the visitor will be asked again.
+    }
+  }
+
+  let beaconLoaded = false;
+
+  function loadBeacon(): void {
+    if (beaconLoaded) return;
+    beaconLoaded = true;
+    const script = document.createElement("script");
+    // Cloudflare skips deprecated browsers via the module type.
+    script.type = "module";
+    script.defer = true;
+    script.src = CF_BEACON_SRC;
+    script.setAttribute(
+      "data-cf-beacon",
+      JSON.stringify({ token: CF_BEACON_TOKEN }),
+    );
+    document.head.append(script);
+  }
+
+  /** Repaints every consent-aware control in the document. */
+  function render(state: State): void {
+    document.documentElement.dataset.consent = state;
+
+    for (const element of document.querySelectorAll<HTMLElement>(
+      "[data-consent-status]",
+    )) {
+      element.textContent = element.dataset[STATUS_ATTRIBUTE[state]] ?? "";
+    }
+
+    // Only the privacy page's pair opts into pressed state.
+    for (const element of document.querySelectorAll<HTMLElement>(
+      "[data-consent-action][aria-pressed]",
+    )) {
+      const action = element.dataset.consentAction;
+      const pressed =
+        (action === "allow" && state === CONSENT_GRANTED) ||
+        (action === "decline" && state === CONSENT_DENIED);
+      element.setAttribute("aria-pressed", String(pressed));
+    }
+  }
+
+  function apply(choice: Choice): void {
+    if (choice === CONSENT_GRANTED) loadBeacon();
+    render(choice);
+    banner?.setAttribute("hidden", "");
+  }
+
+  function choose(choice: Choice): void {
+    writeChoice(choice);
+    // A running beacon cannot be unloaded, so withdrawal mid-visit needs a
+    // fresh document to actually stop reporting.
+    if (choice === CONSENT_DENIED && beaconLoaded) {
+      location.reload();
+      return;
+    }
+    apply(choice);
+  }
+
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const control = target.closest<HTMLElement>("[data-consent-action]");
+    if (!control) return;
+
+    switch (control.dataset.consentAction) {
+      case "allow":
+        choose(CONSENT_GRANTED);
+        break;
+      case "decline":
+        choose(CONSENT_DENIED);
+        break;
+    }
+  });
+
+  if (browserRefuses()) {
+    render("signalled");
+  } else {
+    const stored = readChoice();
+    if (stored) {
+      apply(stored);
+    } else {
+      render("unset");
+      banner?.removeAttribute("hidden");
+    }
+  }
+</script>

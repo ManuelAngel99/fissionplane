@@ -1,0 +1,313 @@
+---
+import Layout from "../layouts/Layout.astro";
+import SiteFooter from "./SiteFooter.astro";
+import SiteHeader from "./SiteHeader.astro";
+import { getDictionary, type Locale } from "../i18n";
+import {
+  CONTACT_EMAIL,
+  FORMSPREE_ENDPOINT,
+  LINKEDIN_URL,
+  X_URL,
+} from "../lib/site";
+import "../styles/landing.css";
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = getDictionary(lang);
+---
+
+<Layout
+  title={t.contact.metaTitle}
+  description={t.contact.metaDescription}
+  lang={lang}
+  pagePath="/contact"
+>
+  <div data-page="fissionplane">
+    <div data-component="container">
+      <SiteHeader lang={lang} t={t} />
+
+      <main data-component="content">
+        <section data-component="contact" aria-labelledby="contact-heading">
+          <div data-slot="hero-copy">
+            <h1 id="contact-heading">{t.contact.heading}</h1>
+            <p>{t.contact.subtitle}</p>
+          </div>
+
+          {/*
+            Same framed two-column panel as the landing hero: direct
+            channels on the left, the form on the right. Header cells share
+            a subgrid row, so the hairline under both lands on one line.
+          */}
+          <div data-slot="contact-grid">
+            <div data-slot="contact-column">
+              <div data-slot="column-header">
+                <h2 data-slot="column-heading" id="contact-direct-heading">
+                  {t.contact.directHeading}
+                </h2>
+                <p data-slot="column-tagline">{t.contact.directBody}</p>
+              </div>
+              <ul data-slot="contact-channels">
+                <li>
+                  <span>{t.contact.emailChannel}</span>
+                  <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+                </li>
+                <li>
+                  <span>LinkedIn</span>
+                  <a
+                    href={LINKEDIN_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    manuel-angel-suarez<span aria-hidden="true"> ↗</span>
+                  </a>
+                </li>
+                <li>
+                  <span>X</span>
+                  <a href={X_URL} target="_blank" rel="noopener noreferrer">
+                    @srmanuelangel<span aria-hidden="true"> ↗</span>
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            <div data-slot="contact-column">
+              <div data-slot="column-header">
+                <h2 data-slot="column-heading" id="contact-form-heading">
+                  {t.contact.formHeading}
+                </h2>
+                <p data-slot="column-tagline">{t.contact.formTagline}</p>
+              </div>
+              {/*
+                The form posts straight to Formspree, which forwards the
+                message to CONTACT_EMAIL with the sender's address as
+                reply-to. Without JavaScript the native POST still works and
+                lands on the Formspree confirmation page; the script below
+                upgrades it to an inline status message.
+              */}
+              <form
+                data-component="contact-form"
+                action={FORMSPREE_ENDPOINT}
+                method="POST"
+                data-sending-label={t.contact.sending}
+                data-success-message={t.contact.success}
+                data-error-message={t.contact.error}
+              >
+                <input
+                  type="hidden"
+                  name="_subject"
+                  value="New message from fissionplane.dev"
+                />
+                {/* Honeypot: hidden from people, filled in by bots. */}
+                <input
+                  type="text"
+                  name="_gotcha"
+                  data-slot="honeypot"
+                  tabindex="-1"
+                  autocomplete="off"
+                  aria-hidden="true"
+                />
+                <div data-slot="field">
+                  <label for="contact-email">{t.contact.emailLabel}</label>
+                  <input
+                    id="contact-email"
+                    type="email"
+                    name="email"
+                    required
+                    autocomplete="email"
+                    spellcheck="false"
+                    aria-describedby="contact-email-error"
+                  />
+                  <p
+                    id="contact-email-error"
+                    data-slot="field-error"
+                    role="alert"
+                  >
+                  </p>
+                </div>
+                <div data-slot="field">
+                  <label for="contact-message">{t.contact.messageLabel}</label>
+                  <textarea
+                    id="contact-message"
+                    name="message"
+                    required
+                    maxlength="3000"
+                    rows="8"
+                    aria-describedby="contact-message-hint contact-message-error"
+                  ></textarea>
+                  <p data-slot="field-hint" id="contact-message-hint">
+                    {t.contact.messageHint}
+                  </p>
+                  <p
+                    id="contact-message-error"
+                    data-slot="field-error"
+                    role="alert"
+                  >
+                  </p>
+                </div>
+                <div data-slot="form-actions">
+                  <button type="submit">{t.contact.submit}</button>
+                  <p data-slot="form-status" role="status" aria-live="polite">
+                  </p>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <SiteFooter lang={lang} t={t} pagePath="/contact" />
+    </div>
+  </div>
+</Layout>
+
+<script>
+  /**
+   * Formspree AJAX error body. Field-level items name the input; form-level
+   * items omit `field` (inactive form, blocked, etc.).
+   * @see https://help.formspree.io/hc/en-us/articles/360013482894
+   */
+  type FormspreeError = {
+    field?: string;
+    message?: string;
+    code?: string;
+  };
+
+  type FormspreeErrorBody = {
+    error?: string;
+    errors?: FormspreeError[];
+  };
+
+  const form = document.querySelector<HTMLFormElement>(
+    '[data-component="contact-form"]',
+  );
+  const button = form?.querySelector<HTMLButtonElement>(
+    'button[type="submit"]',
+  );
+  const status = form?.querySelector<HTMLElement>('[data-slot="form-status"]');
+
+  if (form && button && status) {
+    const idleLabel = button.textContent;
+    const fields = form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      "input:not([type='hidden']):not([data-slot='honeypot']), textarea",
+    );
+
+    /** Formspree often returns sentence fragments; capitalize for display. */
+    function formatMessage(message: string): string {
+      const trimmed = message.trim();
+      if (!trimmed) return trimmed;
+      return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+    }
+
+    function fieldErrorEl(
+      name: string,
+    ): HTMLElement | null {
+      const field = form!.elements.namedItem(name);
+      if (!(field instanceof HTMLElement)) return null;
+      const describedBy = field.getAttribute("aria-describedby");
+      if (!describedBy) return null;
+      for (const id of describedBy.split(/\s+/)) {
+        const el = document.getElementById(id);
+        if (el?.matches('[data-slot="field-error"]')) return el;
+      }
+      return null;
+    }
+
+    function clearFieldErrors() {
+      for (const field of fields) {
+        field.removeAttribute("aria-invalid");
+        const errorEl = fieldErrorEl(field.name);
+        if (errorEl) errorEl.textContent = "";
+      }
+    }
+
+    function setFieldError(name: string, message: string) {
+      const field = form!.elements.namedItem(name);
+      if (!(field instanceof HTMLElement)) return;
+      field.setAttribute("aria-invalid", "true");
+      const errorEl = fieldErrorEl(name);
+      if (errorEl) errorEl.textContent = formatMessage(message);
+    }
+
+    function applyFormspreeErrors(body: FormspreeErrorBody | null) {
+      const fieldMessages = new Map<string, string[]>();
+      const formMessages: string[] = [];
+
+      for (const entry of body?.errors ?? []) {
+        const message = entry.message?.trim();
+        if (!message) continue;
+        if (entry.field) {
+          const list = fieldMessages.get(entry.field) ?? [];
+          list.push(message);
+          fieldMessages.set(entry.field, list);
+        } else {
+          formMessages.push(message);
+        }
+      }
+
+      for (const [name, messages] of fieldMessages) {
+        setFieldError(name, messages.join(" "));
+      }
+
+      const firstInvalid = form!.querySelector<HTMLElement>("[aria-invalid='true']");
+      firstInvalid?.focus();
+
+      // Field errors live under their inputs. Status is for form-level
+      // failures (or when Formspree gave us nothing field-specific).
+      if (formMessages.length > 0) {
+        status.dataset.state = "error";
+        status.textContent = formMessages.map(formatMessage).join(" ");
+        return;
+      }
+      if (fieldMessages.size === 0) {
+        status.dataset.state = "error";
+        status.textContent =
+          formatMessage(body?.error ?? "") ||
+          form!.dataset.errorMessage ||
+          "";
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      button.disabled = true;
+      button.textContent = form.dataset.sendingLabel ?? idleLabel;
+      status.textContent = "";
+      status.removeAttribute("data-state");
+      clearFieldErrors();
+
+      try {
+        const response = await fetch(form.action, {
+          method: "POST",
+          body: new FormData(form),
+          headers: { Accept: "application/json" },
+        });
+
+        let body: FormspreeErrorBody | null = null;
+        try {
+          body = (await response.json()) as FormspreeErrorBody;
+        } catch {
+          body = null;
+        }
+
+        if (!response.ok) {
+          applyFormspreeErrors(body);
+          return;
+        }
+
+        form.reset();
+        clearFieldErrors();
+        status.dataset.state = "success";
+        status.textContent = form.dataset.successMessage ?? "";
+      } catch {
+        status.dataset.state = "error";
+        status.textContent = form.dataset.errorMessage ?? "";
+      } finally {
+        button.disabled = false;
+        button.textContent = idleLabel;
+      }
+    });
+  }
+</script>

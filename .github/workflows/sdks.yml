@@ -1,0 +1,184 @@
+name: SDKs
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+concurrency:
+  group: sdks-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  # Run the expensive jobs only when the contract, the SDKs, or this
+  # pipeline itself changed.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      sdks: ${{ steps.filter.outputs.sdks }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            sdks:
+              - 'src/contracts/**'
+              - 'src/sdks/**'
+              - 'src/package.json'
+              - 'src/pnpm-lock.yaml'
+              - 'src/pnpm-workspace.yaml'
+              - 'src/tsconfig.base.json'
+              - 'redocly.yaml'
+              - 'justfile'
+              - '.github/workflows/sdks.yml'
+
+  spec-lint:
+    name: Lint the contract
+    needs: changes
+    if: needs.changes.outputs.sdks == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: pnpm --package=@redocly/cli@2 dlx redocly lint src/contracts/openapi.yaml src/contracts/dataplane.yaml
+
+  # The contract is reviewed by diff; a breaking change must be a
+  # deliberate one. Compares the PR's document against the base branch.
+  breaking-changes:
+    name: Breaking-change detection
+    needs: changes
+    if: needs.changes.outputs.sdks == 'true' && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Extract the base branch's contract
+        id: base
+        run: |
+          if git show "origin/${{ github.base_ref }}:src/contracts/openapi.yaml" > /tmp/base-openapi.yaml 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No contract on the base branch yet; skipping."
+          fi
+      - name: Fail on breaking changes
+        if: steps.base.outputs.exists == 'true'
+        uses: oasdiff-action/breaking@v0.0.19
+        with:
+          base: /tmp/base-openapi.yaml
+          revision: src/contracts/openapi.yaml
+
+  # The contract is the source of truth: regenerate both SDK cores and
+  # fail if the committed copies differ (control-plane.md: "CI fails if
+  # regenerating produces a diff").
+  drift:
+    name: Generated code matches the contract
+    needs: changes
+    if: needs.changes.outputs.sdks == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: src/pnpm-lock.yaml
+      - uses: astral-sh/setup-uv@v5
+      - uses: extractions/setup-just@v2
+      - name: Regenerate SDK cores
+        run: just generate-sdks
+      - name: Fail on drift
+        run: |
+          git diff --exit-code -- src/sdks src/contracts || {
+            echo "::error::Generated SDK code is out of date with src/contracts/openapi.yaml."
+            echo "::error::Run 'just generate-sdks' and commit the result alongside the spec change."
+            exit 1
+          }
+
+  typescript:
+    name: TypeScript SDK
+    needs: changes
+    if: needs.changes.outputs.sdks == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/sdks/typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: src/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run format:check
+      - run: pnpm run lint
+      - run: pnpm run typecheck
+      - run: pnpm test
+
+  python:
+    name: Python SDK (${{ matrix.python-version }})
+    needs: changes
+    if: needs.changes.outputs.sdks == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor the package declares, and current stable.
+        python-version: ["3.10", "3.13"]
+    defaults:
+      run:
+        working-directory: src/sdks/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run ty check
+      - run: uv run pytest -q
+      # The package must remain buildable, not merely importable.
+      - run: uv build
+
+  # Single required status check; passes when the path filter skipped
+  # the pipeline.
+  status-check:
+    name: SDKs CI Status
+    runs-on: ubuntu-latest
+    needs: [changes, spec-lint, breaking-changes, drift, typescript, python]
+    if: always()
+    steps:
+      - name: Check job status
+        run: |
+          if [ "${{ needs.changes.outputs.sdks }}" != "true" ]; then
+            echo "No SDK or contract changes; skipping."
+            exit 0
+          fi
+          results="${{ needs.spec-lint.result }} ${{ needs.breaking-changes.result }} ${{ needs.drift.result }} ${{ needs.typescript.result }} ${{ needs.python.result }}"
+          for result in $results; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              echo "One or more SDK jobs failed"
+              exit 1
+            fi
+          done
+          echo "All SDK checks passed"

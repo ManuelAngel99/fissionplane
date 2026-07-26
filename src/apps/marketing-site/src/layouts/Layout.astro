@@ -1,0 +1,357 @@
+---
+import ibmPlexMono400 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url";
+import ibmPlexMono500 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2?url";
+import ibmPlexMono700 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-700-normal.woff2?url";
+import "../styles/global.css";
+import "../styles/consent.css";
+import ConsentBanner from "../components/ConsentBanner.astro";
+import {
+  DEFAULT_LOCALE,
+  LOCALES,
+  LOCALE_TAGS,
+  OG_LOCALES,
+  getDictionary,
+  localePath,
+  type Locale,
+} from "../i18n";
+import {
+  DOCS_URL,
+  GITHUB_URL,
+  LICENSE_URL,
+  SITE_NAME,
+  SITE_ORIGIN,
+} from "../lib/site";
+
+interface Props {
+  title: string;
+  description?: string;
+  /** Content language of this page. Defaults to the default locale. */
+  lang?: Locale;
+  /**
+   * Locale-agnostic path of this page ("/", "/brand", …). When set, the
+   * layout emits the canonical URL and one hreflang alternate per locale.
+   * Leave unset for pages without translations (e.g. the 404 document).
+   */
+  pagePath?: string;
+  /** robots directive. Defaults to indexable pages or noindex for HTTP 404. */
+  robots?: string;
+  ogType?: "website" | "article";
+  /** Site-relative path to the social preview image. */
+  image?: string;
+  imageAlt?: string;
+  /**
+   * When true, emit Organization / WebSite / WebPage / SoftwareApplication
+   * JSON-LD. Defaults to true on homepages and false elsewhere.
+   */
+  jsonLd?: boolean;
+  /** Extra @graph nodes merged after the default entity graph (e.g. FAQPage). */
+  jsonLdGraph?: Record<string, unknown>[];
+}
+
+const DEFAULT_DESCRIPTION =
+  "Open-source platform for secure sandboxes and serverless functions in self-hosted Firecracker microVMs.";
+const OG_IMAGE_PATH = "/og-image.png";
+const OG_IMAGE_WIDTH = 1200;
+const OG_IMAGE_HEIGHT = 630;
+const THEME_COLOR_LIGHT = "#fcfafa";
+const THEME_COLOR_DARK = "#131110";
+
+const {
+  title,
+  description = DEFAULT_DESCRIPTION,
+  lang = DEFAULT_LOCALE,
+  pagePath,
+  robots: robotsProp,
+  ogType = "website",
+  image = OG_IMAGE_PATH,
+  imageAlt = "FissionPlane — self-hosted sandboxes and serverless functions on Firecracker microVMs",
+  jsonLd: jsonLdProp,
+  jsonLdGraph = [],
+} = Astro.props;
+
+const isNotFound = Astro.response.status === 404;
+const robots =
+  robotsProp ??
+  (isNotFound
+    ? "noindex, nofollow"
+    : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1");
+
+const pathname = pagePath ? localePath(lang, pagePath) : Astro.url.pathname;
+const canonicalURL = new URL(pathname || "/", SITE_ORIGIN);
+if (canonicalURL.pathname !== "/") {
+  canonicalURL.pathname = canonicalURL.pathname.replace(/\/+$/, "") || "/";
+}
+const canonicalHref = canonicalURL.href;
+
+/** hreflang alternates: one per locale plus x-default on the default locale. */
+const alternates = pagePath
+  ? LOCALES.map((locale) => ({
+      hreflang: LOCALE_TAGS[locale],
+      href: new URL(localePath(locale, pagePath), SITE_ORIGIN).href,
+    }))
+  : [];
+const xDefaultHref = pagePath
+  ? new URL(localePath(DEFAULT_LOCALE, pagePath), SITE_ORIGIN).href
+  : null;
+
+const imageURL = new URL(image, SITE_ORIGIN).href;
+const isHome = !isNotFound && pagePath === "/";
+const shouldEmitJsonLd = jsonLdProp ?? isHome;
+
+const languageTag = LOCALE_TAGS[lang];
+const ogLocale = OG_LOCALES[lang];
+const ogLocaleAlternates = LOCALES.filter((locale) => locale !== lang).map(
+  (locale) => OG_LOCALES[locale],
+);
+
+const organizationId = `${SITE_ORIGIN}/#organization`;
+const websiteId = `${SITE_ORIGIN}/#website`;
+const softwareId = `${SITE_ORIGIN}/#software`;
+const webpageId = `${canonicalHref}#webpage`;
+
+const jsonLd = shouldEmitJsonLd
+  ? {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": organizationId,
+          name: SITE_NAME,
+          url: `${SITE_ORIGIN}/`,
+          logo: {
+            "@type": "ImageObject",
+            url: new URL("/favicon.svg", SITE_ORIGIN).href,
+          },
+          sameAs: [GITHUB_URL],
+        },
+        {
+          "@type": "WebSite",
+          "@id": websiteId,
+          url: `${SITE_ORIGIN}/`,
+          name: SITE_NAME,
+          description,
+          inLanguage: languageTag,
+          publisher: { "@id": organizationId },
+        },
+        {
+          "@type": "WebPage",
+          "@id": webpageId,
+          url: canonicalHref,
+          name: title,
+          description,
+          isPartOf: { "@id": websiteId },
+          about: { "@id": softwareId },
+          primaryImageOfPage: {
+            "@type": "ImageObject",
+            url: imageURL,
+            width: OG_IMAGE_WIDTH,
+            height: OG_IMAGE_HEIGHT,
+          },
+          inLanguage: languageTag,
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": softwareId,
+          name: SITE_NAME,
+          description,
+          url: `${SITE_ORIGIN}/`,
+          applicationCategory: "DeveloperApplication",
+          operatingSystem: "Linux",
+          license: LICENSE_URL,
+          isAccessibleForFree: true,
+          codeRepository: GITHUB_URL,
+          downloadUrl: GITHUB_URL,
+          softwareHelp: {
+            "@type": "WebPage",
+            url: DOCS_URL,
+          },
+          author: { "@id": organizationId },
+          publisher: { "@id": organizationId },
+          programmingLanguage: ["TypeScript", "Python", "Rust"],
+          keywords: [
+            "secure code execution",
+            "Firecracker",
+            "microVM",
+            "sandbox",
+            "serverless functions",
+            "self-hosted",
+            "Kubernetes",
+            "open source",
+          ],
+        },
+        ...jsonLdGraph,
+      ],
+    }
+  : null;
+
+const jsonLdSerialized = jsonLd ? JSON.stringify(jsonLd) : null;
+---
+
+<!doctype html>
+<html lang={languageTag}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      rel="preload"
+      href={ibmPlexMono400}
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href={ibmPlexMono500}
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href={ibmPlexMono700}
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <style
+      is:inline
+      set:html={`
+      @font-face {
+        font-family: 'IBM Plex Mono';
+        font-style: normal;
+        font-display: block;
+        font-weight: 400;
+        src: url('${ibmPlexMono400}') format('woff2');
+      }
+      @font-face {
+        font-family: 'IBM Plex Mono';
+        font-style: normal;
+        font-display: block;
+        font-weight: 500;
+        src: url('${ibmPlexMono500}') format('woff2');
+      }
+      @font-face {
+        font-family: 'IBM Plex Mono';
+        font-style: normal;
+        font-display: block;
+        font-weight: 700;
+        src: url('${ibmPlexMono700}') format('woff2');
+      }
+      html {
+        background: ${THEME_COLOR_LIGHT};
+      }
+      @media (prefers-color-scheme: dark) {
+        html {
+          background: ${THEME_COLOR_DARK};
+        }
+      }
+      html:not(.fonts-ready) body {
+        visibility: hidden;
+      }
+    `}
+    />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="author" content={SITE_NAME} />
+    <meta name="creator" content={SITE_NAME} />
+    <meta name="publisher" content={SITE_NAME} />
+    <meta name="robots" content={robots} />
+    <meta name="googlebot" content={robots} />
+    <meta name="bingbot" content={robots} />
+    <link rel="canonical" href={canonicalHref} />
+    {
+      alternates.map((alternate) => (
+        <link
+          rel="alternate"
+          hreflang={alternate.hreflang}
+          href={alternate.href}
+        />
+      ))
+    }
+    {
+      xDefaultHref && (
+        <link rel="alternate" hreflang="x-default" href={xDefaultHref} />
+      )
+    }
+
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="theme-color"
+      content={THEME_COLOR_LIGHT}
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content={THEME_COLOR_DARK}
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta name="application-name" content={SITE_NAME} />
+    <meta name="apple-mobile-web-app-title" content={SITE_NAME} />
+    <meta name="format-detection" content="telephone=no" />
+
+    <meta property="og:locale" content={ogLocale} />
+    {
+      ogLocaleAlternates.map((alternate) => (
+        <meta property="og:locale:alternate" content={alternate} />
+      ))
+    }
+    <meta property="og:type" content={ogType} />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalHref} />
+    <meta property="og:image" content={imageURL} />
+    <meta property="og:image:secure_url" content={imageURL} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content={String(OG_IMAGE_WIDTH)} />
+    <meta property="og:image:height" content={String(OG_IMAGE_HEIGHT)} />
+    <meta property="og:image:alt" content={imageAlt} />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageURL} />
+    <meta name="twitter:image:alt" content={imageAlt} />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    {
+      jsonLdSerialized && (
+        <script
+          is:inline
+          type="application/ld+json"
+          set:html={jsonLdSerialized}
+        />
+      )
+    }
+  </head>
+  <body>
+    <slot />
+    <ConsentBanner lang={lang} t={getDictionary(lang)} />
+    <script is:inline>
+      (function () {
+        var root = document.documentElement;
+        function show() {
+          root.classList.add("fonts-ready");
+        }
+        if (!document.fonts) {
+          show();
+          return;
+        }
+        Promise.all([
+          document.fonts.load('400 16px "IBM Plex Mono"'),
+          document.fonts.load('500 16px "IBM Plex Mono"'),
+          document.fonts.load('700 16px "IBM Plex Mono"'),
+        ]).then(show, show);
+        setTimeout(show, 3000);
+      })();
+    </script>
+    <noscript>
+      <style>
+        html:not(.fonts-ready) body {
+          visibility: visible;
+        }
+      </style>
+    </noscript>
+  </body>
+</html>

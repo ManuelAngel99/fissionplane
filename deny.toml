@@ -1,0 +1,49 @@
+# cargo-deny: supply-chain policy. Run with `just deny` or
+# `cargo deny check`; CI runs it on every push.
+
+[graph]
+# Audit everything that can possibly be compiled in, not just the
+# default-feature slice.
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+# Every ignore carries a comment explaining why we are not affected and
+# what would make the entry removable.
+ignore = []
+
+[licenses]
+version = 2
+# Workspace crates are unpublished locally; the check applies to
+# third-party code only. First-party crates are Apache-2.0.
+private = { ignore = true }
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+]
+
+# Mozilla's CA-bundle data (rustls's trust roots, via the Rust SDK's
+# reqwest) ships under the permissive data licence. Scoped to the one
+# crate rather than allowed globally.
+[[licenses.exceptions]]
+name = "webpki-roots"
+allow = ["CDLA-Permissive-2.0"]
+
+[bans]
+# Duplicate major versions of the same crate are usually an accident of
+# version bounds; surface them without blocking the build.
+multiple-versions = "warn"
+# A wildcard bound means "whatever resolves today", which is never the
+# intent for code sealed into snapshots.
+wildcards = "deny"
+# Workspace-internal path dependencies carry no version (the workspace is
+# the version); only private, unpublished crates get this latitude.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

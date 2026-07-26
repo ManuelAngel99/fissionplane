@@ -1,0 +1,15 @@
+[package]
+name = "fissionplane-domain"
+description = "Validated domain value objects shared by FissionPlane Rust services."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nanoid = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

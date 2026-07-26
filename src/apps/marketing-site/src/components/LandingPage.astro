@@ -1,0 +1,488 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PixelDot from "./PixelDot.astro";
+import SiteFooter from "./SiteFooter.astro";
+import SiteHeader from "./SiteHeader.astro";
+import { getDictionary, type Locale } from "../i18n";
+import { DOCS_URL, GITHUB_URL } from "../lib/site";
+import icon from "../assets/icon.svg?url";
+import awsLogo from "../assets/logos/amazonwebservices.svg?raw";
+import azureLogo from "../assets/logos/azure.svg?raw";
+import googleCloudLogo from "../assets/logos/googlecloud.svg?raw";
+import kubernetesLogo from "../assets/logos/kubernetes.svg?raw";
+import "../styles/landing.css";
+
+/** Monochrome brand marks for the deploy-anywhere visual. */
+const deployTargets = [
+  { name: "AWS", svg: awsLogo },
+  { name: "Google Cloud", svg: googleCloudLogo },
+  { name: "Azure", svg: azureLogo },
+  { name: "Kubernetes", svg: kubernetesLogo },
+];
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = getDictionary(lang);
+
+// FAQPage only; other entity JSON-LD is emitted by Layout on home pages.
+const faqJsonLd = {
+  "@type": "FAQPage",
+  mainEntity: t.faq.items.map((faq) => ({
+    "@type": "Question",
+    name: faq.question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: faq.answer,
+    },
+  })),
+};
+
+/**
+ * Architecture diagram, turbopuffer style. Every line is exactly 73
+ * characters, so the block stays rectangular in any monospace font.
+ */
+/** Plain-text sources for the copy-code buttons, one per SDK panel. */
+const tsExample = `import { FissionPlane } from '@fissionplane/sdk'
+
+const client = new FissionPlane()
+const sandbox = await client.sandboxes.create({ template: 'base' })
+
+const result = await sandbox.commands.run('echo', {
+  args: ['hello from a microVM'],
+})
+
+console.log(result.stdout)
+await sandbox.delete()`;
+
+const pyExample = `from fissionplane import FissionPlane
+
+client = FissionPlane()
+sandbox = client.sandboxes.create("base")
+
+result = sandbox.commands.run(
+    "echo",
+    args=["hello from a microVM"],
+)
+
+print(result.stdout)
+sandbox.delete()`;
+
+const rustExample = `use fissionplane::models::{CreateSandboxRequest, RunCommandRequest};
+use fissionplane::{ClientOptions, FissionPlane};
+
+#[tokio::main]
+async fn main() -> Result<(), fissionplane::Error> {
+    let client = FissionPlane::new(ClientOptions::new())?;
+
+    let request = CreateSandboxRequest {
+        template: "base".to_owned(),
+        ..Default::default()
+    };
+    let sandbox = client.sandboxes().create(request, None).await?;
+
+    let run = RunCommandRequest {
+        command: "echo".to_owned(),
+        args: Some(vec!["hello from a microVM".to_owned()]),
+        ..Default::default()
+    };
+    let result = sandbox.commands()?.run(run).await?;
+
+    println!("{}", result.stdout);
+    sandbox.delete().await?;
+    Ok(())
+}`;
+
+const RAW_CONTRACTS_URL =
+  "https://raw.githubusercontent.com/ManuelAngel99/fissionplane/main/src/contracts";
+
+/**
+ * Copied to the clipboard by the "let your AI agent build your own SDK"
+ * link. Written in ASD-STE100 style: short sentences, active voice, one
+ * instruction per sentence, consistent terms. Always English — it speaks
+ * to an AI agent, not to the visitor.
+ */
+const agentPrompt = `Build a FissionPlane SDK for my target language.
+
+Context: FissionPlane is an open-source compute platform. It runs sandboxes and serverless functions in Firecracker microVMs. Two OpenAPI 3.0 contracts define its HTTP APIs. The contracts are the source of truth. Reference SDKs exist for TypeScript, Python, and Rust.
+
+Sources:
+- Documentation: ${DOCS_URL}
+- Control-plane contract (sandbox and template lifecycle): ${RAW_CONTRACTS_URL}/openapi.yaml
+- Data-plane contract (commands, files, PTYs, ports): ${RAW_CONTRACTS_URL}/dataplane.yaml
+- Streaming protocol: ${GITHUB_URL}/blob/main/src/contracts/dataplane-streaming.md
+- Reference SDKs: ${GITHUB_URL}/tree/main/src/sdks
+
+Instructions:
+1. Ask me for the target language. Do not start before I answer.
+2. Read the documentation. Learn how a client authenticates and how it finds the base URL.
+3. Download both contracts. Generate all request and response types from them. Do not write the types by hand.
+4. Implement every operation in the control-plane contract.
+5. Implement every operation in the data-plane contract.
+6. Implement the streaming surface as the streaming document describes it.
+7. Use the shared error schema for all failures. Expose the "code" and "retryable" fields to the caller.
+8. Match the public API shape of the reference SDKs. Use the idioms of the target language.
+9. Write a test for each operation.
+10. Show me the package layout before you write the code.`;
+
+const architectureDiagram = `                 ╔═ your kubernetes cluster ═══════════════════════════╗ 
+╔══════════════╗ ║   ┌───────────────┐          ┌──────────────────┐   ║░
+║  SDK / REST  ║─╫──▶│    gateway    │──mTLS───▶│  node · vm-host  │   ║░
+╚══════════════╝ ║   │ TLS · routing │          │  ┌────────────┐  │   ║░
+ ░░░░░░░░░░░░░░  ║   └───────────────┘          │  │ ▪ microVM  │  │   ║░
+                 ║   ┌───────────────┐          │  │ ▪ microVM  │  │   ║░
+                 ║   │ control plane │──gRPC───▶│  │ ▪ microVM  │  │   ║░
+                 ║   │ place · quota │          │  └────────────┘  │   ║░
+                 ║   └───────────────┘          └────────┬─────────┘   ║░
+                 ║                                 pause │ resume      ║░
+                 ║                              ┌────────▼─────────┐   ║░
+                 ║                              │  object storage  │   ║░
+                 ║                              └──────────────────┘   ║░
+                 ╚═════════════════════════════════════════════════════╝░
+                  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░`;
+---
+
+<Layout
+  title={t.meta.title}
+  description={t.meta.description}
+  imageAlt={t.meta.imageAlt}
+  lang={lang}
+  pagePath="/"
+  jsonLdGraph={[faqJsonLd]}
+>
+  <div data-page="fissionplane">
+    <div data-component="container">
+      <SiteHeader lang={lang} t={t} />
+
+      <main data-component="content">
+        <section data-component="hero" aria-labelledby="hero-heading">
+          <div data-slot="hero-copy">
+            <h1 id="hero-heading">{t.hero.heading}</h1>
+            <p>{t.hero.body}</p>
+          </div>
+
+          <div data-slot="hero-grid">
+            <div data-slot="hero-column">
+              <div data-slot="column-header">
+                <h2 data-slot="column-heading">{t.platform.heading}</h2>
+                <p data-slot="column-tagline">{t.platform.tagline}</p>
+              </div>
+              <div data-slot="deploy-visual">
+                <div data-slot="deploy-hub" aria-hidden="true">
+                  <img src={icon} alt="" width="44" height="42" />
+                </div>
+                <div data-slot="deploy-line" aria-hidden="true"></div>
+                <ul data-slot="deploy-grid">
+                  {
+                    deployTargets.map((target) => (
+                      <li>
+                        <Fragment set:html={target.svg} />
+                        <span>{target.name}</span>
+                      </li>
+                    ))
+                  }
+                </ul>
+              </div>
+              <p data-slot="column-note">{t.platform.note}</p>
+            </div>
+
+            <div data-slot="hero-column">
+              <div data-slot="column-header">
+                <h2 data-slot="column-heading">{t.install.heading}</h2>
+                <p data-slot="column-tagline">{t.install.tagline}</p>
+              </div>
+              <div data-slot="installation">
+            <input class="install-input" type="radio" name="install" id="install-ts" checked />
+            <input class="install-input" type="radio" name="install" id="install-py" />
+            <input class="install-input" type="radio" name="install" id="install-rust" />
+            <div data-slot="tablist" role="group" aria-label={t.install.groupLabel}>
+              <label data-slot="tab" for="install-ts">TypeScript</label>
+              <label data-slot="tab" for="install-py">Python</label>
+              <label data-slot="tab" for="install-rust">Rust</label>
+            </div>
+            <div data-slot="panels">
+              <div data-slot="panel" data-panel="ts">
+                <button type="button" data-slot="command" data-copy="npm install @fissionplane/sdk" data-copy-label={t.install.copyLabel} data-copied-label={t.install.copiedLabel} aria-label={t.install.copyLabel}>
+                  <span data-slot="command-script">npm install <span data-slot="highlight">@fissionplane/sdk</span></span>
+                  <span data-component="copy-status" aria-hidden="true">
+                    <svg data-slot="copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    <svg data-slot="check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  </span>
+                </button>
+                <pre data-slot="example"><code><span class="t-k">import</span> <span class="t-x">&#123;</span> <span class="t-d">FissionPlane</span> <span class="t-x">&#125;</span> <span class="t-k">from</span> <span class="t-s">'@fissionplane/sdk'</span>
+
+<span class="t-k">const</span> client <span class="t-x">=</span> <span class="t-k">new</span> <span class="t-d">FissionPlane</span><span class="t-x">()</span>
+<span class="t-k">const</span> sandbox <span class="t-x">=</span> <span class="t-k">await</span> client<span class="t-x">.</span><span class="t-p">sandboxes</span><span class="t-x">.</span><span class="t-p">create</span><span class="t-x">(&#123;</span> <span class="t-p">template</span><span class="t-x">:</span> <span class="t-s">'base'</span> <span class="t-x">&#125;)</span>
+
+<span class="t-k">const</span> result <span class="t-x">=</span> <span class="t-k">await</span> sandbox<span class="t-x">.</span><span class="t-p">commands</span><span class="t-x">.</span><span class="t-p">run</span><span class="t-x">(</span><span class="t-s">'echo'</span><span class="t-x">,</span> <span class="t-x">&#123;</span>
+  <span class="t-p">args</span><span class="t-x">:</span> <span class="t-x">[</span><span class="t-s">'hello from a microVM'</span><span class="t-x">],</span>
+<span class="t-x">&#125;)</span>
+
+console<span class="t-x">.</span><span class="t-p">log</span><span class="t-x">(</span>result<span class="t-x">.</span><span class="t-p">stdout</span><span class="t-x">)</span>
+<span class="t-k">await</span> sandbox<span class="t-x">.</span><span class="t-p">delete</span><span class="t-x">()</span></code></pre>
+                <button type="button" data-slot="copy-code" data-copy={tsExample} data-copy-label={t.install.copyCode} data-copied-label={t.install.copiedLabel} aria-label={t.install.copyCode}>
+                  <span data-component="copy-status" aria-hidden="true">
+                    <svg data-slot="copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    <svg data-slot="check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  </span>
+                </button>
+              </div>
+              <div data-slot="panel" data-panel="py">
+                <button type="button" data-slot="command" data-copy="pip install fissionplane" data-copy-label={t.install.copyLabel} data-copied-label={t.install.copiedLabel} aria-label={t.install.copyLabel}>
+                  <span data-slot="command-script">pip install <span data-slot="highlight">fissionplane</span></span>
+                  <span data-component="copy-status" aria-hidden="true">
+                    <svg data-slot="copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    <svg data-slot="check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  </span>
+                </button>
+                <pre data-slot="example"><code><span class="t-k">from</span> fissionplane <span class="t-k">import</span> <span class="t-d">FissionPlane</span>
+
+client <span class="t-x">=</span> <span class="t-d">FissionPlane</span><span class="t-x">()</span>
+sandbox <span class="t-x">=</span> client<span class="t-x">.</span><span class="t-p">sandboxes</span><span class="t-x">.</span><span class="t-p">create</span><span class="t-x">(</span><span class="t-s">"base"</span><span class="t-x">)</span>
+
+result <span class="t-x">=</span> sandbox<span class="t-x">.</span><span class="t-p">commands</span><span class="t-x">.</span><span class="t-p">run</span><span class="t-x">(</span>
+    <span class="t-s">"echo"</span><span class="t-x">,</span>
+    args<span class="t-x">=</span><span class="t-x">[</span><span class="t-s">"hello from a microVM"</span><span class="t-x">],</span>
+<span class="t-x">)</span>
+
+<span class="t-d">print</span><span class="t-x">(</span>result<span class="t-x">.</span><span class="t-p">stdout</span><span class="t-x">)</span>
+sandbox<span class="t-x">.</span><span class="t-p">delete</span><span class="t-x">()</span></code></pre>
+                <button type="button" data-slot="copy-code" data-copy={pyExample} data-copy-label={t.install.copyCode} data-copied-label={t.install.copiedLabel} aria-label={t.install.copyCode}>
+                  <span data-component="copy-status" aria-hidden="true">
+                    <svg data-slot="copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    <svg data-slot="check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  </span>
+                </button>
+              </div>
+              <div data-slot="panel" data-panel="rust">
+                <button type="button" data-slot="command" data-copy="cargo add fissionplane" data-copy-label={t.install.copyLabel} data-copied-label={t.install.copiedLabel} aria-label={t.install.copyLabel}>
+                  <span data-slot="command-script">cargo add <span data-slot="highlight">fissionplane</span></span>
+                  <span data-component="copy-status" aria-hidden="true">
+                    <svg data-slot="copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    <svg data-slot="check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  </span>
+                </button>
+                <pre data-slot="example"><code><span class="t-k">use</span> fissionplane<span class="t-x">::</span>models<span class="t-x">::&#123;</span><span class="t-d">CreateSandboxRequest</span><span class="t-x">,</span> <span class="t-d">RunCommandRequest</span><span class="t-x">&#125;;</span>
+<span class="t-k">use</span> fissionplane<span class="t-x">::&#123;</span><span class="t-d">ClientOptions</span><span class="t-x">,</span> <span class="t-d">FissionPlane</span><span class="t-x">&#125;;</span>
+
+<span class="t-c">#[tokio::main]</span>
+<span class="t-k">async fn</span> <span class="t-d">main</span><span class="t-x">() -&gt;</span> <span class="t-d">Result</span><span class="t-x">&lt;(),</span> fissionplane<span class="t-x">::</span><span class="t-d">Error</span><span class="t-x">&gt; &#123;</span>
+    <span class="t-k">let</span> client <span class="t-x">=</span> <span class="t-d">FissionPlane</span><span class="t-x">::</span><span class="t-p">new</span><span class="t-x">(</span><span class="t-d">ClientOptions</span><span class="t-x">::</span><span class="t-p">new</span><span class="t-x">())?;</span>
+
+    <span class="t-k">let</span> request <span class="t-x">=</span> <span class="t-d">CreateSandboxRequest</span> <span class="t-x">&#123;</span>
+        <span class="t-p">template</span><span class="t-x">:</span> <span class="t-s">"base"</span><span class="t-x">.</span><span class="t-p">to_owned</span><span class="t-x">(),</span>
+        <span class="t-x">..</span><span class="t-d">Default</span><span class="t-x">::</span><span class="t-p">default</span><span class="t-x">()</span>
+    <span class="t-x">&#125;;</span>
+    <span class="t-k">let</span> sandbox <span class="t-x">=</span> client<span class="t-x">.</span><span class="t-p">sandboxes</span><span class="t-x">().</span><span class="t-p">create</span><span class="t-x">(</span>request<span class="t-x">,</span> <span class="t-n">None</span><span class="t-x">).</span><span class="t-k">await</span><span class="t-x">?;</span>
+
+    <span class="t-k">let</span> run <span class="t-x">=</span> <span class="t-d">RunCommandRequest</span> <span class="t-x">&#123;</span>
+        <span class="t-p">command</span><span class="t-x">:</span> <span class="t-s">"echo"</span><span class="t-x">.</span><span class="t-p">to_owned</span><span class="t-x">(),</span>
+        <span class="t-p">args</span><span class="t-x">:</span> <span class="t-n">Some</span><span class="t-x">(</span><span class="t-d">vec!</span><span class="t-x">[</span><span class="t-s">"hello from a microVM"</span><span class="t-x">.</span><span class="t-p">to_owned</span><span class="t-x">()]),</span>
+        <span class="t-x">..</span><span class="t-d">Default</span><span class="t-x">::</span><span class="t-p">default</span><span class="t-x">()</span>
+    <span class="t-x">&#125;;</span>
+    <span class="t-k">let</span> result <span class="t-x">=</span> sandbox<span class="t-x">.</span><span class="t-p">commands</span><span class="t-x">()?.</span><span class="t-p">run</span><span class="t-x">(</span>run<span class="t-x">).</span><span class="t-k">await</span><span class="t-x">?;</span>
+
+    <span class="t-d">println!</span><span class="t-x">(</span><span class="t-s">"&#123;&#125;"</span><span class="t-x">,</span> result<span class="t-x">.</span><span class="t-p">stdout</span><span class="t-x">);</span>
+    sandbox<span class="t-x">.</span><span class="t-p">delete</span><span class="t-x">().</span><span class="t-k">await</span><span class="t-x">?;</span>
+    <span class="t-n">Ok</span><span class="t-x">(())</span>
+<span class="t-x">&#125;</span></code></pre>
+                <button type="button" data-slot="copy-code" data-copy={rustExample} data-copy-label={t.install.copyCode} data-copied-label={t.install.copiedLabel} aria-label={t.install.copyCode}>
+                  <span data-component="copy-status" aria-hidden="true">
+                    <svg data-slot="copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    <svg data-slot="check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+              <p data-slot="column-note">
+                {t.install.agentPrefix}{" "}
+                <button type="button" data-slot="agent-link" data-copy={agentPrompt} data-toast={t.install.copiedToast} data-copy-label={t.install.agentLink} data-copied-label={t.install.copiedToast}>
+                  {t.install.agentLink}
+                </button>
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section
+          data-component="workloads"
+          id="workloads"
+          aria-labelledby="workloads-heading"
+        >
+          <div data-slot="section-title">
+            <h2 id="workloads-heading">{t.workloads.heading}</h2>
+            <p>{t.workloads.intro}</p>
+          </div>
+          <div data-slot="workload-grid">
+            {
+              [t.workloads.sandboxes, t.workloads.functions].map((card) => (
+                <article data-slot="workload">
+                  <h3>{card.title}</h3>
+                  <p data-slot="workload-tagline">{card.tagline}</p>
+                  <ul>
+                    {card.bullets.map((bullet) => (
+                      <li>
+                        <PixelDot />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              ))
+            }
+          </div>
+        </section>
+
+        <section
+          data-component="architecture"
+          id="architecture"
+          aria-labelledby="architecture-heading"
+        >
+          <div data-slot="section-title">
+            <h2 id="architecture-heading">{t.architecture.heading}</h2>
+            <p>{t.architecture.body}</p>
+          </div>
+          <pre
+            data-slot="diagram"
+            role="img"
+            aria-label={t.architecture.diagramLabel}>{architectureDiagram}</pre>
+        </section>
+
+        <section
+          data-component="use-cases"
+          id="use-cases"
+          aria-labelledby="use-cases-heading"
+        >
+          <div data-slot="section-title">
+            <h2 id="use-cases-heading">{t.useCases.heading}</h2>
+          </div>
+          <ul>
+            {
+              t.useCases.items.map((item) => (
+                <li>
+                  <h3>{item.title}</h3>
+                  <p>{item.body}</p>
+                </li>
+              ))
+            }
+          </ul>
+        </section>
+
+        <section
+          data-component="what"
+          id="what-is-fissionplane"
+          aria-labelledby="what-heading"
+        >
+          <div data-slot="section-title">
+            <h2 id="what-heading">{t.what.heading}</h2>
+            <p>{t.what.body}</p>
+          </div>
+          <ul>
+            {
+              t.what.bullets.map((bullet) => (
+                <li>
+                  <PixelDot />
+                  <span>
+                    <strong>{bullet.strong}</strong>{" "}
+                    {bullet.text}
+                  </span>
+                </li>
+              ))
+            }
+          </ul>
+          <a href={DOCS_URL}>
+            {t.what.link}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.5 12L17 12M13 16.5L17.5 12L13 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" /></svg>
+          </a>
+        </section>
+
+        <section data-component="faq" id="faq" aria-labelledby="faq-heading">
+          <div data-slot="section-title">
+            <h2 id="faq-heading">{t.faq.heading}</h2>
+          </div>
+          <ul>
+            {
+              t.faq.items.map((faq) => (
+                <li>
+                  <details>
+                    <summary>
+                      <span data-slot="faq-icon">
+                        <svg data-slot="faq-icon-plus" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M7 5h5v2H7v5H5V7H0V5h5V0h2v5z" fill="currentColor" /></svg>
+                        <svg data-slot="faq-icon-minus" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M0 5h12v2H0V5z" fill="currentColor" /></svg>
+                      </span>
+                      <h3 data-slot="faq-question-text">{faq.question}</h3>
+                    </summary>
+                    <p data-slot="faq-answer">{faq.answer}</p>
+                  </details>
+                </li>
+              ))
+            }
+          </ul>
+        </section>
+
+        <section data-component="cta" aria-labelledby="cta-heading">
+          <div data-slot="cta-copy">
+            <strong id="cta-heading">{t.cta.heading}</strong>
+            <p>{t.cta.body}</p>
+            <a href={DOCS_URL}>
+              {t.cta.link}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.5 12L17 12M13 16.5L17.5 12L13 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" /></svg>
+            </a>
+          </div>
+        </section>
+      </main>
+
+      <SiteFooter lang={lang} t={t} pagePath="/" />
+    </div>
+
+    <div data-component="copy-toast" role="status" aria-live="polite" data-state="hidden">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+      <span data-slot="toast-text"></span>
+    </div>
+  </div>
+</Layout>
+
+<script is:inline>
+  // Click-to-copy for the install commands, code examples, and the agent
+  // prompt. Progressive enhancement: everything stays selectable when the
+  // Clipboard API is unavailable.
+  const toast = document.querySelector("[data-component='copy-toast']");
+  let toastTimer;
+  function showToast(message) {
+    if (!toast) return;
+    toast.querySelector("[data-slot='toast-text']").textContent = message;
+    toast.setAttribute("data-state", "visible");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.setAttribute("data-state", "hidden");
+    }, 2400);
+  }
+
+  for (const button of document.querySelectorAll("[data-copy]")) {
+    button.addEventListener("click", async () => {
+      const text = button.getAttribute("data-copy") || "";
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        return;
+      }
+      const toastMessage = button.getAttribute("data-toast");
+      if (toastMessage) showToast(toastMessage);
+      button.setAttribute("data-copied", "");
+      button.setAttribute(
+        "aria-label",
+        button.getAttribute("data-copied-label") || "Copied",
+      );
+      setTimeout(() => {
+        button.removeAttribute("data-copied");
+        button.setAttribute(
+          "aria-label",
+          button.getAttribute("data-copy-label") || "Copy install command",
+        );
+      }, 2000);
+    });
+  }
+</script>

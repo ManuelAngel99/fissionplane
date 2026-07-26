@@ -1,0 +1,10 @@
+# Pinned exactly, not "stable": local builds, CI, and any A/B comparison
+# across revisions must compile with the same compiler, and guest binaries
+# are sealed into snapshots — an untracked toolchain drift is an untracked
+# behaviour change. Bumps are deliberate, reviewed commits.
+[toolchain]
+channel = "1.97.1"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
+# Guest binaries (vm-init, vm-steward) are statically linked musl.
+targets = ["x86_64-unknown-linux-musl"]

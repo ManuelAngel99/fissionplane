@@ -53,7 +53,7 @@ export const es: Dictionary = {
         "Ejecuta comandos y transmite stdin, stdout y stderr.",
         "Abre sesiones PTY, envía señales y observa archivos.",
         "Expón puertos del invitado mediante URLs HTTPS privadas o públicas.",
-        "Pausa hacia almacenamiento de objetos. Reanuda con los procesos intactos.",
+        "Pausa en almacenamiento de objetos. Reanuda con los procesos intactos.",
       ],
     },
     functions: {
@@ -62,8 +62,8 @@ export const es: Dictionary = {
       bullets: [
         "Despliega funciones versionadas desde imágenes OCI.",
         "Invócalas por HTTPS o de forma programada.",
-        "Arrancan desde snapshots calientes en milisegundos.",
-        "Escalan a cero entre invocaciones.",
+        "Arranca desde snapshots calientes en milisegundos.",
+        "Escala a cero entre invocaciones.",
         "Vuelve a una versión anterior con una sola llamada.",
       ],
     },
@@ -113,7 +113,7 @@ export const es: Dictionary = {
       },
       {
         strong: "Sandboxes con estado.",
-        text: "Pausa un sandbox hacia almacenamiento de objetos. Reanuda su memoria, procesos y archivos donde se detuvieron.",
+        text: "Pausa un sandbox en almacenamiento de objetos. Reanuda su memoria, procesos y archivos donde se detuvieron.",
       },
       {
         strong: "Funciones serverless.",
@@ -174,7 +174,7 @@ export const es: Dictionary = {
       {
         question: "¿Se pueden pausar y reanudar los sandboxes de FissionPlane?",
         answer:
-          "Sí. Puedes pausar un sandbox hacia almacenamiento de objetos y reanudar su memoria, procesos, sistema de archivos y estado de dispositivos donde se detuvieron.",
+          "Sí. Puedes pausar un sandbox en almacenamiento de objetos y reanudar su memoria, procesos, sistema de archivos y estado de dispositivos donde se detuvieron.",
       },
       {
         question:
@@ -280,7 +280,7 @@ export const es: Dictionary = {
     formTagline: "Leo todos los mensajes y respondo por correo.",
     emailLabel: "Tu correo electrónico",
     messageLabel: "Mensaje",
-    messageHint: "Hasta 3000 caracteres.",
+    messageHint: "Hasta 3.000 caracteres.",
     submit: "Enviar mensaje",
     sending: "Enviando…",
     success: "Mensaje enviado. Te responderé pronto.",

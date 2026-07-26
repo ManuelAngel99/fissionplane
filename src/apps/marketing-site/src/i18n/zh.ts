@@ -34,7 +34,7 @@ export const zh: Dictionary = {
     copiedLabel: "已复制",
     copyCode: "复制代码",
     agentPrefix: "或者，",
-    agentLink: "让你的 AI 代理根据 OpenAPI 规范构建你自己的 SDK",
+    agentLink: "让你的 AI 智能体根据 OpenAPI 规范构建你自己的 SDK",
     copiedToast: "提示词已复制到剪贴板",
   },
   workloads: {
@@ -272,7 +272,7 @@ export const zh: Dictionary = {
     formTagline: "每条消息我都会阅读，并通过邮件回复。",
     emailLabel: "你的邮箱",
     messageLabel: "消息",
-    messageHint: "最多 3000 个字符。",
+    messageHint: "最多 3,000 个字符。",
     submit: "发送消息",
     sending: "发送中…",
     success: "消息已发送，我会尽快回复。",

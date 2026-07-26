@@ -1,0 +1,58 @@
+name: Deploy marketing site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/apps/marketing-site/**'
+      - '.github/workflows/deploy-marketing.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-marketing-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Validate and deploy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.0
+        with:
+          version: 10.30.3
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: src/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check formatting
+        run: pnpm --filter @fissionplane/marketing-site format:check
+      - name: Check workflow formatting
+        working-directory: .
+        run: src/node_modules/.bin/oxfmt --config src/.oxfmtrc.json --check .github/workflows/deploy-marketing.yml
+      - name: Lint
+        run: pnpm --filter @fissionplane/marketing-site lint
+      - name: Typecheck Astro site
+        run: pnpm --filter @fissionplane/marketing-site typecheck
+      - name: Typecheck Worker
+        run: pnpm --filter @fissionplane/marketing-site worker:typecheck
+      - name: Build marketing site
+        run: pnpm --filter @fissionplane/marketing-site build
+      - name: Validate Worker bundle
+        run: pnpm --filter @fissionplane/marketing-site cf:dry-run
+      - name: Deploy to Cloudflare Workers
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: pnpm --filter @fissionplane/marketing-site cf:deploy

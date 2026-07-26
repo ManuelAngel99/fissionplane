@@ -24,7 +24,7 @@ export const de: Dictionary = {
   platform: {
     heading: "Deployen Sie in Ihre eigene Cloud",
     tagline:
-      "Ein Helm-Chart installiert die gesamte Plattform auf jedem Kubernetes-Cluster: EKS, GKE, AKS oder Ihre eigenen Maschinen.",
+      "Ein Helm-Chart installiert die gesamte Plattform auf jedem Kubernetes-Cluster: EKS, GKE, AKS oder auf Ihren eigenen Maschinen.",
     note: "Läuft auch auf k3s, Bare Metal und in Air-Gapped-Netzen.",
   },
   install: {
@@ -53,7 +53,7 @@ export const de: Dictionary = {
         "Führen Sie Befehle aus und streamen Sie stdin, stdout und stderr.",
         "Öffnen Sie PTY-Sitzungen, senden Sie Signale und beobachten Sie Dateien.",
         "Geben Sie Gast-Ports über private oder öffentliche HTTPS-URLs frei.",
-        "Pausieren Sie in den Objektspeicher. Setzen Sie mit intakten Prozessen fort.",
+        "Pausieren Sie im Objektspeicher. Setzen Sie mit intakten Prozessen fort.",
       ],
     },
     functions: {
@@ -113,7 +113,7 @@ export const de: Dictionary = {
       },
       {
         strong: "Zustandsbehaftete Sandboxes.",
-        text: "Pausieren Sie eine Sandbox in den Objektspeicher. Setzen Sie Speicher, Prozesse und Dateien dort fort, wo sie angehalten haben.",
+        text: "Pausieren Sie eine Sandbox im Objektspeicher. Setzen Sie Speicher, Prozesse und Dateien dort fort, wo sie gestoppt wurden.",
       },
       {
         strong: "Serverless-Funktionen.",
@@ -129,7 +129,7 @@ export const de: Dictionary = {
       },
       {
         strong: "Kubernetes-nativ.",
-        text: "Ein Helm-Chart installiert in einen bestehenden Cluster. Kein Operator. Keine Custom Resources.",
+        text: "Lässt sich mit einem Helm-Chart in einen bestehenden Cluster installieren. Kein Operator. Keine Custom Resources.",
       },
       {
         strong: "Resilienter Datenpfad.",
@@ -174,7 +174,7 @@ export const de: Dictionary = {
       {
         question: "Können FissionPlane-Sandboxes pausiert und fortgesetzt werden?",
         answer:
-          "Ja. Sie können eine Sandbox in den Objektspeicher pausieren und Speicher, Prozesse, Dateisystem und Gerätezustand dort fortsetzen, wo sie angehalten haben.",
+          "Ja. Sie können eine Sandbox im Objektspeicher pausieren und Speicher, Prozesse, Dateisystem und Gerätezustand dort fortsetzen, wo sie gestoppt wurden.",
       },
       {
         question:
@@ -282,7 +282,7 @@ export const de: Dictionary = {
     formTagline: "Ich lese jede Nachricht und antworte per E-Mail.",
     emailLabel: "Ihre E-Mail-Adresse",
     messageLabel: "Nachricht",
-    messageHint: "Bis zu 3000 Zeichen.",
+    messageHint: "Bis zu 3.000 Zeichen.",
     submit: "Nachricht senden",
     sending: "Wird gesendet…",
     success: "Nachricht gesendet. Ich antworte bald.",

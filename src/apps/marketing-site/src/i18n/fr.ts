@@ -53,7 +53,7 @@ export const fr: Dictionary = {
         "Exécutez des commandes et diffusez stdin, stdout et stderr.",
         "Ouvrez des sessions PTY, envoyez des signaux, surveillez des fichiers.",
         "Exposez des ports invités via des URLs HTTPS privées ou publiques.",
-        "Mettez en pause vers le stockage objet. Reprenez avec les processus intacts.",
+        "Mettez en pause dans le stockage objet. Reprenez avec les processus intacts.",
       ],
     },
     functions: {
@@ -70,7 +70,7 @@ export const fr: Dictionary = {
   },
   architecture: {
     heading: "Un cluster. Quatre plans.",
-    body: "Le plan de contrôle décide de ce qui s'exécute et où. La gateway route le trafic vers le bon nœud. Le runtime du nœud gère les microVMs. Le plan invité est présumé hostile. Le plan de contrôle ne fait jamais office de proxy pour le trafic, donc les sandboxes et fonctions en cours continuent de fonctionner même si le plan de contrôle tombe.",
+    body: "Le plan de contrôle décide de ce qui s'exécute et où. La gateway route le trafic vers le bon nœud. Le runtime du nœud gère les microVMs. Le plan invité est présumé hostile. Le plan de contrôle ne fait jamais office de proxy pour le trafic, donc les sandboxes et fonctions en cours continuent de fonctionner même en cas de panne du plan de contrôle.",
     diagramLabel:
       "Schéma d'architecture : un SDK ou client REST se connecte en HTTPS à une gateway et à un plan de contrôle dans votre cluster Kubernetes. La gateway relaie le trafic vers des nœuds vm-host qui exécutent des microVMs Firecracker. Les snapshots circulent entre les nœuds et le stockage objet.",
   },
@@ -113,7 +113,7 @@ export const fr: Dictionary = {
       },
       {
         strong: "Sandboxes avec état.",
-        text: "Mettez un sandbox en pause vers le stockage objet. Reprenez sa mémoire, ses processus et ses fichiers là où ils se sont arrêtés.",
+        text: "Mettez un sandbox en pause dans le stockage objet. Reprenez sa mémoire, ses processus et ses fichiers là où ils se sont arrêtés.",
       },
       {
         strong: "Fonctions serverless.",
@@ -175,7 +175,7 @@ export const fr: Dictionary = {
         question:
           "Peut-on mettre en pause puis reprendre les sandboxes FissionPlane ?",
         answer:
-          "Oui. Vous pouvez mettre un sandbox en pause vers le stockage objet, puis reprendre sa mémoire, ses processus, son système de fichiers et l'état de ses périphériques là où ils se sont arrêtés.",
+          "Oui. Vous pouvez mettre un sandbox en pause dans le stockage objet, puis reprendre sa mémoire, ses processus, son système de fichiers et l'état de ses périphériques là où ils se sont arrêtés.",
       },
       {
         question:
@@ -224,7 +224,7 @@ export const fr: Dictionary = {
       allowed: "Les statistiques sont activées.",
       declined: "Les statistiques sont désactivées.",
       undecided:
-        "Vous n'avez pas encore choisi. Les statistiques restent désactivées jusque-là.",
+        "Vous n'avez pas encore choisi. Les statistiques restent désactivées tant que vous ne l'avez pas fait.",
       signalled:
         "Votre navigateur demande à ne pas être suivi : les statistiques restent désactivées.",
       allow: "Accepter les statistiques",

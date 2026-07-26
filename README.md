@@ -22,7 +22,9 @@
 </p>
 
 <p align="center">
-  <a href="docs/index.md">Documentation</a> ·
+  <a href="https://fissionplane.dev">Website</a> ·
+  <a href="https://fissionplane.dev/docs">Product documentation</a> ·
+  <a href="https://fissionplane.dev/docs/quickstart">Quickstart</a> ·
   <a href="docs/architecture/overview.md">Architecture</a> ·
   <a href="src/contracts/">API contracts</a> ·
   <a href="docs/development.md">Development</a>
@@ -119,9 +121,15 @@ Handwritten layers provide sandbox handles, errors, pagination, and streaming.
 The Rust SDK is handwritten and tested against mock HTTP and WebSocket
 servers.
 
-- [TypeScript SDK](src/sdks/typescript/README.md)
-- [Python SDK](src/sdks/python/README.md)
-- [Rust SDK](src/sdks/rust/README.md)
+For installation, SDK usage, tutorials, and product guidance, read the
+[product documentation](https://fissionplane.dev/docs) or start with the
+[quickstart](https://fissionplane.dev/docs/quickstart).
+
+Repository SDK references:
+
+- [TypeScript SDK package](src/sdks/typescript/README.md)
+- [Python SDK package](src/sdks/python/README.md)
+- [Rust SDK package](src/sdks/rust/README.md)
 
 ## Repository map
 
@@ -133,7 +141,8 @@ servers.
   value-object definitions for their respective runtimes.
 - [`src/contracts`](src/contracts) contains the public HTTP contracts.
 - [`src/sdks`](src/sdks) contains the TypeScript, Python, and Rust clients.
-- [`docs`](docs/index.md) contains the design and component documents.
+- [`docs`](docs/index.md) contains internal engineering, design, and component
+  documents.
 - [`deploy/dev`](deploy/dev) initializes local development stores. It does not
   contain production manifests.
 
@@ -175,9 +184,13 @@ Run `just --list` to see all development commands. Read the
 [local development guide](docs/development.md) for store roles, ports,
 migrations, and troubleshooting.
 
-## Documentation
+## Engineering documentation
 
-- [Documentation index](docs/index.md) defines the project vocabulary and
+These repository documents cover implementation, architecture, and
+development. For public installation and usage guidance, see the
+[product documentation](https://fissionplane.dev/docs).
+
+- [Engineering documentation index](docs/index.md) defines the project vocabulary and
   system invariants.
 - [System overview](docs/architecture/overview.md) explains components,
   lifecycle flows, storage, and Kubernetes deployment.

@@ -10,6 +10,11 @@ default:
 # Everything CI enforces, in the order CI runs it.
 ci: fmt-check clippy test check-guest lock deny
 
+# Format everything in place, then run every linter, then every type
+# checker, across Rust, TypeScript, Python, and the contracts. The
+# fix-up pass before committing; `ci` is the read-only gate.
+lint: fmt fmt-ts fmt-python clippy lint-ts lint-sdk-ts lint-python lint-spec check check-guest typecheck-ts typecheck-python
+
 # Format the whole workspace in place.
 fmt:
     cargo fmt --all
@@ -56,6 +61,39 @@ deny:
 # Linux-only in practice: macOS needs a musl cross linker.
 build-guest:
     cargo build --release --locked --target x86_64-unknown-linux-musl -p vm-init -p vm-steward
+
+# --- Per-language format / lint / type-check pieces (composed by `just lint`, useful standalone) ---
+
+# Format the TypeScript workspace in place (oxfmt). Covers apps, libs,
+# and the TypeScript SDK.
+fmt-ts:
+    cd src && pnpm run format
+
+# Format the Python SDK in place (ruff).
+fmt-python:
+    cd src/sdks/python && uv sync --quiet && uv run ruff format .
+
+# Lint the TypeScript apps and libs (type-aware oxlint).
+lint-ts:
+    cd src && pnpm run lint
+
+# Lint the TypeScript SDK; the root oxlint pass only covers apps and libs.
+lint-sdk-ts:
+    cd src/sdks/typescript && pnpm run lint
+
+# Lint the Python SDK (ruff).
+lint-python:
+    cd src/sdks/python && uv sync --quiet && uv run ruff check .
+
+# Type-check the TypeScript workspace (per-package tsc / astro check),
+# plus the marketing worker's separate tsconfig.
+typecheck-ts:
+    cd src && pnpm run typecheck
+    cd src && pnpm --filter @fissionplane/marketing-site run worker:typecheck
+
+# Type-check the Python SDK (ty).
+typecheck-python:
+    cd src/sdks/python && uv sync --quiet && uv run ty check
 
 # --- Local development stack (docker compose: postgres, redis, clickhouse, minio) ---
 

@@ -189,6 +189,8 @@ migrations, and troubleshooting.
   responsibility.
 - [TypeScript architecture](docs/typescript-architecture.md) covers the
   console and backoffice applications.
+- [SDK releases](docs/sdk-releases.md) documents versioning, registry
+  credentials, and the tag-driven release pipeline.
 
 ## Contributing
 

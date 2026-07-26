@@ -9,7 +9,7 @@ license.workspace = true
 authors.workspace = true
 repository = "https://github.com/ManuelAngel99/fissionplane"
 homepage = "https://github.com/ManuelAngel99/fissionplane"
-publish = true
+publish = ["crates-io"]
 
 [dependencies]
 futures-util = { workspace = true }

@@ -36,7 +36,9 @@ jobs:
               - 'src/tsconfig.base.json'
               - 'redocly.yaml'
               - 'justfile'
+              - 'scripts/check_sdk_release_version.py'
               - '.github/workflows/sdks.yml'
+              - '.github/workflows/release-sdks.yml'
 
   spec-lint:
     name: Lint the contract
@@ -162,12 +164,26 @@ jobs:
       # The package must remain buildable, not merely importable.
       - run: uv build
 
+  rust:
+    name: Rust SDK
+    needs: changes
+    if: needs.changes.outputs.sdks == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.97"
+      - run: cargo test --locked -p fissionplane
+      # Exercise exactly the packaging checks crates.io performs.
+      - run: cargo publish --locked -p fissionplane --dry-run
+
   # Single required status check; passes when the path filter skipped
   # the pipeline.
   status-check:
     name: SDKs CI Status
     runs-on: ubuntu-latest
-    needs: [changes, spec-lint, breaking-changes, drift, typescript, python]
+    needs: [changes, spec-lint, breaking-changes, drift, typescript, python, rust]
     if: always()
     steps:
       - name: Check job status
@@ -176,7 +192,7 @@ jobs:
             echo "No SDK or contract changes; skipping."
             exit 0
           fi
-          results="${{ needs.spec-lint.result }} ${{ needs.breaking-changes.result }} ${{ needs.drift.result }} ${{ needs.typescript.result }} ${{ needs.python.result }}"
+          results="${{ needs.spec-lint.result }} ${{ needs.breaking-changes.result }} ${{ needs.drift.result }} ${{ needs.typescript.result }} ${{ needs.python.result }} ${{ needs.rust.result }}"
           for result in $results; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "One or more SDK jobs failed"

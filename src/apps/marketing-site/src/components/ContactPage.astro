@@ -180,6 +180,13 @@ const t = getDictionary(lang);
     errors?: FormspreeError[];
   };
 
+  /** Formspree often returns sentence fragments; capitalize for display. */
+  function formatMessage(message: string): string {
+    const trimmed = message.trim();
+    if (!trimmed) return trimmed;
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  }
+
   const form = document.querySelector<HTMLFormElement>(
     '[data-component="contact-form"]',
   );
@@ -194,13 +201,6 @@ const t = getDictionary(lang);
     const fields = form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
       "input:not([type='hidden']):not([data-slot='honeypot']), textarea",
     );
-
-    /** Formspree often returns sentence fragments; capitalize for display. */
-    function formatMessage(message: string): string {
-      const trimmed = message.trim();
-      if (!trimmed) return trimmed;
-      return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-    }
 
     function fieldErrorEl(
       name: string,

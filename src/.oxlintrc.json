@@ -23,5 +23,13 @@
         ]
       }
     ]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["apps/marketing-site/**/*"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
 }

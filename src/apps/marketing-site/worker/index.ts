@@ -1,5 +1,3 @@
-/// <reference path="../worker-configuration.d.ts" />
-
 const MINTLIFY_HOST = "opensandbox-4ac929f1.mintlify.site";
 const PUBLIC_HOST = "fissionplane.dev";
 

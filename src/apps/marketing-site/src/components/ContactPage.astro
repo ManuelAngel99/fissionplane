@@ -189,6 +189,7 @@ const t = getDictionary(lang);
   const status = form?.querySelector<HTMLElement>('[data-slot="form-status"]');
 
   if (form && button && status) {
+    const formStatus = status;
     const idleLabel = button.textContent;
     const fields = form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
       "input:not([type='hidden']):not([data-slot='honeypot']), textarea",
@@ -257,13 +258,13 @@ const t = getDictionary(lang);
       // Field errors live under their inputs. Status is for form-level
       // failures (or when Formspree gave us nothing field-specific).
       if (formMessages.length > 0) {
-        status.dataset.state = "error";
-        status.textContent = formMessages.map(formatMessage).join(" ");
+        formStatus.dataset.state = "error";
+        formStatus.textContent = formMessages.map(formatMessage).join(" ");
         return;
       }
       if (fieldMessages.size === 0) {
-        status.dataset.state = "error";
-        status.textContent =
+        formStatus.dataset.state = "error";
+        formStatus.textContent =
           formatMessage(body?.error ?? "") ||
           form!.dataset.errorMessage ||
           "";
@@ -274,8 +275,8 @@ const t = getDictionary(lang);
       event.preventDefault();
       button.disabled = true;
       button.textContent = form.dataset.sendingLabel ?? idleLabel;
-      status.textContent = "";
-      status.removeAttribute("data-state");
+      formStatus.textContent = "";
+      formStatus.removeAttribute("data-state");
       clearFieldErrors();
 
       try {
@@ -299,11 +300,11 @@ const t = getDictionary(lang);
 
         form.reset();
         clearFieldErrors();
-        status.dataset.state = "success";
-        status.textContent = form.dataset.successMessage ?? "";
+        formStatus.dataset.state = "success";
+        formStatus.textContent = form.dataset.successMessage ?? "";
       } catch {
-        status.dataset.state = "error";
-        status.textContent = form.dataset.errorMessage ?? "";
+        formStatus.dataset.state = "error";
+        formStatus.textContent = form.dataset.errorMessage ?? "";
       } finally {
         button.disabled = false;
         button.textContent = idleLabel;

@@ -683,11 +683,14 @@ body {
 [data-component='what'],
 [data-component='faq'],
 [data-component='cta'],
-[data-component='footer'],
-[data-component='legal'] {
+[data-component='footer'] {
   content-visibility: auto;
   contain-intrinsic-size: auto 480px;
 }
+
+/* [data-component='legal'] must stay out of the rule above: content-visibility
+   forces paint containment, which clips the language picker's popover when it
+   opens upward beyond the legal bar's box. */
 
 /* ---- "What is" section ------------------------------------------------ */
 
@@ -1001,7 +1004,8 @@ body {
   position: absolute;
   bottom: calc(100% + 10px);
   left: 50%;
-  z-index: 20;
+  /* Above the fixed consent banner (z-index: 30). */
+  z-index: 40;
   min-width: 10rem;
   margin: 0;
   padding: 6px 0;

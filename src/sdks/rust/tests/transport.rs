@@ -15,7 +15,6 @@ use fissionplane::models::{CreateSandboxRequest, RunCommandRequest};
 use fissionplane::{ClientOptions, Error, FissionPlane, ListSandboxesFilter, Url};
 use serde_json::json;
 use tracing::Level;
-use tracing::instrument::WithSubscriber;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, Request, ResponseTemplate};
 
@@ -368,7 +367,7 @@ async fn a_create_with_an_idempotency_key_is_replayed() {
     assert_eq!(calls.load(Ordering::SeqCst), 2);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn debug_events_report_a_replay_and_a_page_fetch() {
     let server = MockServer::start().await;
     let (_, responder) = flaky(
@@ -388,15 +387,15 @@ async fn debug_events_report_a_replay_and_a_page_fetch() {
         .with_max_level(Level::DEBUG)
         .with_writer(move || Recorder(Arc::clone(&writer)))
         .finish();
-    async {
-        client(&server)
-            .sandboxes()
-            .list(ListSandboxesFilter::default())
-            .await
-            .unwrap();
-    }
-    .with_subscriber(subscriber)
-    .await;
+    // The default Tokio test runtime is current-thread, but keep that explicit:
+    // tracing's scoped default is thread-local and must remain on this thread
+    // while the request yields between attempts.
+    let _subscriber = tracing::subscriber::set_default(subscriber);
+    client(&server)
+        .sandboxes()
+        .list(ListSandboxesFilter::default())
+        .await
+        .unwrap();
 
     let events = String::from_utf8(log.lock().unwrap().clone()).unwrap();
     assert!(events.contains("fetching a page of sandboxes"), "{events}");

@@ -119,14 +119,20 @@ Actions trusted publisher:
 The official PyPA publish action performs the OIDC exchange. Remove any
 long-lived PyPI token from repository secrets after this is tested.
 
-### crates.io token
+### crates.io trusted publisher
 
-crates.io does not currently support trusted publishing. Create a token scoped
-to the `fissionplane` crate with publish-new/publish-update permissions and add
-it as the `CARGO_REGISTRY_TOKEN` secret on the `crates-io` environment.
+Under the `fissionplane` crate's trusted publishing settings on crates.io, add
+a GitHub Actions trusted publisher:
 
-Use a dedicated CI token, rotate it periodically, and revoke any token that has
-been pasted into chat or logs.
+- Repository owner: `ManuelAngel99`
+- Repository: `fissionplane`
+- Workflow file: `release-sdks.yml`
+- Environment: `crates-io`
+
+The crates.io job requests `id-token: write`. The official
+`rust-lang/crates-io-auth-action` exchanges that OIDC identity for a short-lived
+token, passes it to `cargo publish`, and revokes it when the job completes. No
+`CARGO_REGISTRY_TOKEN` repository or environment secret is used.
 
 ## Repository protections
 

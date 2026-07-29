@@ -23,9 +23,6 @@
       "weight": 700
     }
   },
-  "icons": {
-    "library": "lucide"
-  },
   "background": {
     "color": {
       "light": "#FCFAFA",

@@ -2,11 +2,11 @@
   "$schema": "https://mintlify.com/docs.json",
   "name": "FissionPlane",
   "theme": "aspen",
-  "favicon": "https://media.brand.dev/8e121207-80b7-4e0e-8746-49087740825e.svg",
+  "favicon": "/favicon.svg",
   "colors": {
-    "primary": "#837c7c",
-    "light": "#171717",
-    "dark": "#bdbaba"
+    "primary": "#777171",
+    "light": "#bdbaba",
+    "dark": "#837c7c"
   },
   "navbar": {
     "primary": {

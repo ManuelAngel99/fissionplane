@@ -11,6 +11,7 @@
     "dev:console": "pnpm --parallel --filter @fissionplane/console-api --filter @fissionplane/console-web dev",
     "dev:backoffice": "pnpm --parallel --filter @fissionplane/backoffice-api --filter @fissionplane/backoffice-web dev",
     "dev:marketing": "pnpm --filter @fissionplane/marketing-site dev",
+    "dev:docs": "pnpm --filter @fissionplane/fissionplane-docs dev",
     "deploy:marketing": "pnpm --filter @fissionplane/marketing-site cf:deploy",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",

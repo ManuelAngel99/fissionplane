@@ -1,55 +1,33 @@
-# Mintlify Starter Kit
+# FissionPlane product documentation
 
-Use the starter kit to get your docs deployed and ready to customize.
+Public product documentation for [FissionPlane](https://fissionplane.dev),
+served at [fissionplane.dev/docs](https://fissionplane.dev/docs).
 
-Click the green **Use this template** button at the top of this repo to copy the Mintlify starter kit. The starter kit contains examples with
+This app contains installation instructions, SDK guides, product concepts, and
+API reference material. Internal architecture and contributor documentation
+lives in the repository's top-level [`docs`](../../../docs) directory.
 
-- Guide pages
-- Navigation
-- Customizations
-- API reference pages
-- Use of popular components
+## Local development
 
-**[Follow the full quickstart guide](https://starter.mintlify.com/quickstart)**
-
-## AI-assisted writing
-
-Set up your AI coding tool to work with Mintlify:
-
-```bash
-npx skills add https://mintlify.com/docs
+```sh
+cd src
+pnpm install
+pnpm --filter @fissionplane/fissionplane-docs dev
 ```
 
-This command installs Mintlify's documentation skill for your configured AI tools like Claude Code, Cursor, Windsurf, and others. The skill includes component reference, writing standards, and workflow guidance.
+The preview is available at `http://localhost:3000`.
 
-See the [AI tools guides](/ai-tools) for tool-specific setup.
+Before submitting documentation changes, run:
 
-## Development
-
-Install the [Mintlify CLI](https://www.npmjs.com/package/mint) to preview your documentation changes locally. To install, use the following command:
-
-```
-npm i -g mint
+```sh
+pnpm --filter @fissionplane/fissionplane-docs validate
+pnpm --filter @fissionplane/fissionplane-docs broken-links
+pnpm --filter @fissionplane/fissionplane-docs a11y
 ```
 
-Run the following command at the root of your documentation, where your `docs.json` is located:
+## Deployment
 
-```
-mint dev
-```
-
-View your local preview at `http://localhost:3000`.
-
-## Publishing changes
-
-Install our GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app) to propagate changes from your repo to your deployment. Changes are deployed to production automatically after pushing to the default branch.
-
-## Need help?
-
-### Troubleshooting
-
-- If your dev environment isn't running: Run `mint update` to ensure you have the most recent version of the CLI.
-- If a page loads as a 404: Make sure you are running in a folder with a valid `docs.json`.
-
-### Resources
-- [Mintlify documentation](https://mintlify.com/docs)
+Mintlify deploys this directory from the `main` branch of
+[`ManuelAngel99/fissionplane`](https://github.com/ManuelAngel99/fissionplane).
+The deployment's Git settings must enable **docs.json is in a subdirectory**
+with `src/apps/fissionplane-docs` as the directory.

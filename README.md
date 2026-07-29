@@ -133,8 +133,9 @@ Repository SDK references:
 
 ## Repository map
 
-- [`src/apps`](src/apps) contains independently built services and guest
-  programs.
+- [`src/apps`](src/apps) contains independently built services, guest programs,
+  the [marketing site](src/apps/marketing-site), and the
+  [Mintlify product documentation](src/apps/fissionplane-docs).
 - [`src/libs`](src/libs) contains shared Rust and TypeScript packages.
   [`src/libs/rust/domain`](src/libs/rust/domain) and
   [`src/libs/typescript/core`](src/libs/typescript/core) carry the validated

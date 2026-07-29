@@ -1,47 +1,304 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get started with FissionPlane in minutes"
+sidebarTitle: "Quickstart"
+description: "Install the FissionPlane SDK, connect to your control plane, create your first sandbox, and run a command inside a Firecracker microVM."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+This guide walks you through the full path from a fresh SDK install to running a command inside a live Firecracker microVM. You'll create a sandbox from the `base` template, execute a shell command, read the output, and clean up — all in under ten minutes.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+
+  <Step title="Prerequisites">
+
+    Before you begin, make sure you have:
+
+    - A running FissionPlane installation on a Kubernetes cluster. If you haven't installed it yet, follow the [Installation guide](/installation) first.
+    - The **control plane URL** for your installation (for example, `https://api.sandbox.example.com`).
+    - An **API key** issued by your FissionPlane control plane.
+    - The runtime for your chosen SDK: Node.js 20+, Python 3.10+, or Rust 1.97+ with a Tokio runtime.
+
+    <Tip>
+      Ask your platform operator for the control plane URL and an API key if you're connecting to a shared installation rather than one you deployed yourself.
+    </Tip>
+
+  </Step>
+
+  <Step title="Install the SDK">
+
+    Install the FissionPlane SDK for your language.
+
+    <CodeGroup>
+
+    ```bash npm
+    npm install @fissionplane/sdk
+    ```
+
+    ```bash pnpm
+    pnpm add @fissionplane/sdk
+    ```
+
+    ```bash pip
+    pip install fissionplane
+    ```
+
+    ```bash cargo
+    cargo add fissionplane
+    cargo add tokio --features macros,rt-multi-thread
+    ```
+
+    </CodeGroup>
+
+  </Step>
+
+  <Step title="Set environment variables">
+
+    Export your control plane URL and API key so the SDK can find them automatically. Replace the placeholder values with your actual credentials.
 
     ```bash
-    npm install your-package
+    export FISSIONPLANE_API_URL="https://api.sandbox.example.com"
+    export FISSIONPLANE_API_KEY="your-api-key"
     ```
-  </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
 
-    ```bash
-    your-cli init
-    ```
-  </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+    Every SDK reads both variables at startup, so you won't need to hard-code credentials into your application code.
 
-    ```bash
-    your-cli start
-    ```
   </Step>
+
+  <Step title="Create a client">
+
+    Instantiate the FissionPlane client. When both environment variables are set, the constructor requires no arguments.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```ts
+        import { FissionPlane } from '@fissionplane/sdk'
+
+        const client = new FissionPlane()
+        ```
+
+        You can also pass credentials directly:
+
+        ```ts
+        const client = new FissionPlane({
+          baseUrl: 'https://api.sandbox.example.com',
+          apiKey: 'your-api-key',
+        })
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        from fissionplane import FissionPlane
+
+        client = FissionPlane()
+        ```
+
+        You can also pass credentials directly:
+
+        ```python
+        client = FissionPlane(
+            base_url="https://api.sandbox.example.com",
+            api_key="your-api-key",
+        )
+        ```
+      </Tab>
+      <Tab title="Rust">
+        ```rust
+        use fissionplane::{ClientOptions, FissionPlane};
+
+        let client = FissionPlane::new(ClientOptions::new())?;
+        ```
+
+        You can also pass credentials directly:
+
+        ```rust
+        let client = FissionPlane::new(
+            ClientOptions::new()
+                .base_url("https://api.sandbox.example.com")
+                .api_key("your-api-key"),
+        )?;
+        ```
+      </Tab>
+    </Tabs>
+
+  </Step>
+
+  <Step title="Create a sandbox">
+
+    Create a sandbox from the built-in `base` template. The call returns after a node acknowledges the sandbox — your microVM is ready to accept commands.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```ts
+        const sandbox = await client.sandboxes.create(
+          {
+            template: 'base',
+            name: 'my-first-sandbox',
+            deadline_seconds: 600,
+          },
+          { idempotencyKey: 'my-first-sandbox-1' },
+        )
+
+        console.log('Sandbox created:', sandbox.sandboxId)
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        sandbox = client.sandboxes.create(
+            "base",
+            name="my-first-sandbox",
+            deadline_seconds=600,
+            idempotency_key="my-first-sandbox-1",
+        )
+
+        print("Sandbox created:", sandbox.sandbox_id)
+        ```
+      </Tab>
+      <Tab title="Rust">
+        ```rust
+        use fissionplane::models::CreateSandboxRequest;
+
+        let sandbox = client
+            .sandboxes()
+            .create(
+                CreateSandboxRequest {
+                    template: "base".to_owned(),
+                    name: Some("my-first-sandbox".to_owned()),
+                    deadline_seconds: Some(600),
+                    ..Default::default()
+                },
+                Some("my-first-sandbox-1"),
+            )
+            .await?;
+
+        println!("Sandbox created: {}", sandbox.info.sandbox_id);
+        ```
+      </Tab>
+    </Tabs>
+
+    <Note>
+      Sandboxes are deleted automatically when their deadline expires. The `deadline_seconds` value above gives the sandbox ten minutes. You can extend the deadline at any time with `sandbox.extendDeadline()` (TypeScript), `sandbox.extend_deadline()` (Python), or `sandbox.extend_deadline()` (Rust).
+    </Note>
+
+  </Step>
+
+  <Step title="Run a command">
+
+    Run a shell command inside the microVM and print its output. `commands.run()` waits for the process to exit and returns the exit code, stdout, and stderr.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```ts
+        const result = await sandbox.commands.run('echo', {
+          args: ['hello from a microVM'],
+          timeoutSeconds: 30,
+        })
+
+        console.log(result.stdout)   // hello from a microVM
+        console.log(result.exit_code) // 0
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        result = sandbox.commands.run(
+            "echo",
+            args=["hello from a microVM"],
+            timeout_seconds=30,
+        )
+
+        print(result.stdout)    # hello from a microVM
+        print(result.exit_code) # 0
+        ```
+      </Tab>
+      <Tab title="Rust">
+        ```rust
+        use fissionplane::models::RunCommandRequest;
+
+        let result = sandbox
+            .commands()?
+            .run(RunCommandRequest {
+                command: "echo".to_owned(),
+                args: Some(vec!["hello from a microVM".to_owned()]),
+                timeout_seconds: Some(30),
+                ..Default::default()
+            })
+            .await?;
+
+        println!("{}", result.stdout);    // hello from a microVM
+        println!("exit code: {}", result.exit_code); // 0
+        ```
+      </Tab>
+    </Tabs>
+
+  </Step>
+
+  <Step title="Delete the sandbox">
+
+    Delete the sandbox when you're done. This immediately terminates the microVM and releases node capacity.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```ts
+        await sandbox.delete()
+        console.log('Sandbox deleted.')
+        ```
+
+        In production, wrap your commands in a `try/finally` block to ensure cleanup:
+
+        ```ts
+        try {
+          const result = await sandbox.commands.run('echo', {
+            args: ['hello from a microVM'],
+          })
+          console.log(result.stdout)
+        } finally {
+          await sandbox.delete()
+        }
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        sandbox.delete()
+        print("Sandbox deleted.")
+        ```
+
+        In production, use a `try/finally` block to ensure cleanup:
+
+        ```python
+        try:
+            result = sandbox.commands.run(
+                "echo", args=["hello from a microVM"]
+            )
+            print(result.stdout)
+        finally:
+            sandbox.delete()
+        ```
+      </Tab>
+      <Tab title="Rust">
+        ```rust
+        sandbox.delete().await?;
+        println!("Sandbox deleted.");
+        ```
+      </Tab>
+    </Tabs>
+
+  </Step>
+
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Next steps
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+Now that your first sandbox is running, explore what else you can do.
+
+<CardGroup cols={2}>
+  <Card title="Run commands" icon="terminal" href="/guides/run-commands">
+    Stream stdout and stderr in real time, open PTY sessions, and send signals to running processes.
+  </Card>
+  <Card title="Work with files" icon="folder-open" href="/guides/filesystem">
+    Read and write files inside a sandbox, list directories, and watch for filesystem changes.
+  </Card>
+  <Card title="Expose ports" icon="globe" href="/guides/ports">
+    Make a sandbox port accessible over a private or public HTTPS URL from outside the cluster.
+  </Card>
+  <Card title="Sandbox lifecycle" icon="circle-nodes" href="/concepts/sandboxes">
+    Understand how to pause and resume sandboxes, manage deadlines, and use capability tokens.
+  </Card>
+</CardGroup>

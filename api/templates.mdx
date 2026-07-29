@@ -1,0 +1,303 @@
+---
+title: "Templates API: Build and Manage Sandbox Templates"
+sidebarTitle: "Templates"
+description: "Control plane endpoints for template lifecycle. Start async builds from OCI images, stream build logs, list templates, and resolve aliases to artifact IDs."
+---
+
+Templates are the starting point for every sandbox. You build a template from an OCI image reference — FissionPlane resolves the tag to an immutable digest, runs your build recipe inside a VM, captures a warm snapshot, and stores the resulting artifact. You then create sandboxes from the alias or artifact ID, and every sandbox starts from the exact bytes captured at build time.
+
+All template endpoints are on the control plane: `https://<your-domain>/v1`. Authenticate with your organisation API key or OIDC token in the `Authorization: Bearer` header.
+
+<Note>
+  Builds are asynchronous. After you start a build with `POST /v1/templates/builds`,
+  poll `GET /v1/templates/builds/{id}` for status and tail output with
+  `GET /v1/templates/builds/{id}/logs` until the build reaches a terminal state.
+</Note>
+
+---
+
+## POST /v1/templates/builds
+
+Starts an asynchronous template build from an OCI image. The image tag is resolved to an immutable digest immediately and is never re-consulted. If you supply an alias, FissionPlane atomically re-points the alias to the new artifact when the build succeeds — sandboxes being created from the alias mid-build continue to resolve to the previous artifact.
+
+```bash
+curl -X POST https://api.example.com/v1/templates/builds \
+  -H "Authorization: Bearer <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image": "node:22",
+    "alias": "node-tools",
+    "steps": [
+      {"command": "npm install --global pnpm"},
+      {"command": "pnpm --version"}
+    ],
+    "start_command": "node server.js",
+    "ready_command": "curl -sf http://localhost:3000/health"
+  }'
+```
+
+**Request body**
+
+<ParamField body="image" type="string" required>
+  OCI image reference, for example `node:22` or
+  `registry.example.com/myapp:v1.2.3`. The tag is resolved to a digest when
+  the build starts.
+</ParamField>
+
+<ParamField body="alias" type="string">
+  Template alias to point at the new artifact when the build succeeds. Must
+  match `^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`. If the alias already exists
+  it is re-pointed atomically on success.
+</ParamField>
+
+<ParamField body="steps" type="object[]">
+  Ordered recipe steps executed inside the build VM. Up to 128 steps.
+
+  <Expandable title="step fields">
+    <ParamField body="steps[].command" type="string" required>
+      The command to run for this step.
+    </ParamField>
+    <ParamField body="steps[].env" type="object">
+      Environment variables set for this step only. Keys and values are strings.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="start_command" type="string">
+  Command started at boot before the warm snapshot is captured. The captured
+  memory image includes this process already running, so sandboxes resume into
+  a pre-warmed state.
+</ParamField>
+
+<ParamField body="ready_command" type="string">
+  Readiness probe that the warm-up phase waits for before capture. The snapshot
+  is taken only once this command exits zero, so resumed sandboxes start past
+  this point.
+</ParamField>
+
+<ParamField body="resources" type="object">
+  Compute shape for sandboxes created from this template.
+
+  <Expandable title="resources fields">
+    <ParamField body="resources.vcpus" type="integer">
+      Number of virtual CPUs. Minimum 1.
+    </ParamField>
+    <ParamField body="resources.mem_mib" type="integer">
+      Memory in mebibytes. Minimum 128.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Response** — `201 Created`
+
+<ResponseField name="build_id" type="string" required>
+  24-character NanoID for this build. Use it to poll status and read logs.
+</ResponseField>
+
+<ResponseField name="status" type="string" required>
+  Initial status, always `queued`. Transitions to `building`, then `succeeded`
+  or `failed`.
+</ResponseField>
+
+<ResponseField name="image" type="string" required>
+  The image reference as you supplied it.
+</ResponseField>
+
+<ResponseField name="image_digest" type="string">
+  The resolved immutable digest, once the builder has resolved it.
+</ResponseField>
+
+<ResponseField name="alias" type="string">
+  The alias requested, if any.
+</ResponseField>
+
+<ResponseField name="created_at" type="string" required>
+  ISO 8601 timestamp.
+</ResponseField>
+
+**Error codes**: `400` malformed request · `401` unauthenticated · `403` forbidden · `429` rate limited
+
+---
+
+## GET /v1/templates/builds/{id}
+
+Gets the current status of a template build. Poll this endpoint after starting a build to detect when it reaches a terminal state.
+
+```bash
+curl https://api.example.com/v1/templates/builds/<build-id> \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+**Path parameters**
+
+<ParamField path="id" type="string" required>
+  The 24-character build NanoID returned by `POST /v1/templates/builds`.
+</ParamField>
+
+**Response** — `200 OK`
+
+<ResponseField name="build_id" type="string" required>Build identifier.</ResponseField>
+
+<ResponseField name="status" type="string" required>
+  One of `queued`, `building`, `succeeded`, or `failed`. `queued` and `building`
+  are in progress; `succeeded` and `failed` are terminal.
+</ResponseField>
+
+<ResponseField name="artifact_id" type="string">
+  The produced template artifact (`sha256:...`). Present only once `status` is
+  `succeeded`.
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  A description of what failed. Present only when `status` is `failed`.
+</ResponseField>
+
+<ResponseField name="finished_at" type="string">
+  ISO 8601 timestamp when the build reached a terminal state.
+</ResponseField>
+
+**Error codes**: `401` unauthenticated · `404` not found
+
+---
+
+## GET /v1/templates/builds/{id}/logs
+
+Returns log entries from a template build starting at `offset`. Poll this endpoint alongside `GET /v1/templates/builds/{id}` to tail build output. A call at the current end of the log returns an empty page and is not an error.
+
+```bash
+curl "https://api.example.com/v1/templates/builds/<build-id>/logs?offset=0" \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+**Path parameters**
+
+<ParamField path="id" type="string" required>
+  The 24-character build NanoID.
+</ParamField>
+
+**Query parameters**
+
+<ParamField query="offset" type="integer">
+  Entry offset from which to start reading. Default `0`. Pass the `next_offset`
+  from the previous response to read the next page.
+</ParamField>
+
+**Response** — `200 OK`
+
+<ResponseField name="entries" type="object[]" required>
+  Log entries for this page.
+
+  <Expandable title="entry fields">
+    <ResponseField name="timestamp" type="string" required>ISO 8601 timestamp.</ResponseField>
+    <ResponseField name="message" type="string" required>Log line text.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="next_offset" type="integer" required>
+  Pass as `offset` on the next poll to continue reading from where this page
+  left off.
+</ResponseField>
+
+**Error codes**: `401` unauthenticated · `404` not found
+
+---
+
+## GET /v1/templates
+
+Lists templates visible to your organisation, most recently created first.
+
+```bash
+curl "https://api.example.com/v1/templates?limit=20" \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+**Query parameters**
+
+<ParamField query="limit" type="integer">
+  Page size. Between 1 and 100, default 20.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  Opaque cursor from a previous page's `next_cursor`. Omit for the first page.
+</ParamField>
+
+**Response** — `200 OK`
+
+<ResponseField name="items" type="Template[]" required>
+  Array of template objects.
+</ResponseField>
+
+<ResponseField name="next_cursor" type="string">
+  Cursor for the next page. Absent or null on the last page.
+</ResponseField>
+
+---
+
+## GET /v1/templates/{template}
+
+Gets a template by alias or template ID. Because aliases are mutable, reading a template and then creating a sandbox from it can observe different artifacts if the alias is re-pointed between the two calls. The `artifact_id` on the sandbox record always reflects what was actually used.
+
+```bash
+curl https://api.example.com/v1/templates/node-tools \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+**Path parameters**
+
+<ParamField path="template" type="string" required>
+  A template alias (e.g. `node-tools`) or a template ID (NanoID).
+</ParamField>
+
+**Response** — `200 OK`
+
+<ResponseField name="template_id" type="string" required>
+  24-character NanoID for this template record.
+</ResponseField>
+
+<ResponseField name="alias" type="string">
+  The mutable alias pointing at the current artifact, if one is set.
+</ResponseField>
+
+<ResponseField name="artifact_id" type="string" required>
+  The immutable `sha256:...` digest the alias currently resolves to.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Optional human-readable description.
+</ResponseField>
+
+<ResponseField name="resources" type="object">
+  Compute shape defined by this template.
+
+  <Expandable title="resources fields">
+    <ResponseField name="vcpus" type="integer">Virtual CPUs.</ResponseField>
+    <ResponseField name="mem_mib" type="integer">Memory in mebibytes.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="created_at" type="string" required>
+  ISO 8601 timestamp.
+</ResponseField>
+
+**Error codes**: `401` unauthenticated · `404` not found
+
+---
+
+## DELETE /v1/templates/{template}
+
+Deletes the template record and its alias. The underlying artifact bytes are released by the garbage collector once nothing else references them. Existing sandboxes already created from the artifact continue to run unaffected.
+
+```bash
+curl -X DELETE https://api.example.com/v1/templates/node-tools \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+**Path parameters**
+
+<ParamField path="template" type="string" required>
+  A template alias or template ID.
+</ParamField>
+
+**Response** — `204 No Content`
+
+**Error codes**: `401` unauthenticated · `404` not found · `409` template is referenced by an in-progress build

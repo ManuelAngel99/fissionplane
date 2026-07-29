@@ -1,0 +1,114 @@
+---
+title: "Security Model and Isolation in FissionPlane"
+sidebarTitle: "Security"
+description: "Each sandbox runs in a Firecracker microVM with its own kernel and network namespace. Capability tokens gate access. No credentials cross the guest boundary."
+---
+
+FissionPlane is built to run code its operators have no reason to trust. Every design decision around isolation, credentials, and network access follows from that assumption. This page explains what guarantees you get as a user of the platform — what is isolated from what, how access is controlled, and what the platform explicitly does and does not promise.
+
+## Hardware-level isolation
+
+Each sandbox runs in a dedicated Firecracker microVM. That means your sandbox has its own kernel — not a container sharing a kernel with other workloads, but a full hardware-virtualized Linux kernel running inside a microVM. It also has its own filesystem and its own network namespace.
+
+<CardGroup cols={3}>
+  <Card title="Its own kernel" icon="microchip">
+    The kernel inside your sandbox is completely separate from the host kernel and from every other sandbox's kernel.
+  </Card>
+  <Card title="Its own filesystem" icon="hard-drive">
+    Each sandbox starts from a clean snapshot of its template. No filesystem state is shared between sandboxes.
+  </Card>
+  <Card title="Its own network namespace" icon="network-wired">
+    Sandboxes cannot reach each other's processes or the cluster network directly. All external access is routed through the gateway.
+  </Card>
+</CardGroup>
+
+Hardware virtualization is the boundary that actually contains a hostile workload. Everything else is defence in depth on top of it.
+
+## Sandboxes share nothing
+
+Two sandboxes from the same template start from identical snapshots, but from that point on they are completely independent. There is no shared memory, no shared filesystem, and no network route between them. A process running in sandbox A cannot observe, reach, or influence anything in sandbox B, even if both belong to the same organization and both started from the same template.
+
+## Capability tokens
+
+Accessing a sandbox's data plane — running commands, reading and writing files, connecting to an exposed port — requires a short-lived **capability token**. Tokens are signed by the control plane and scoped to a specific sandbox and a specific epoch. They are not reusable across sandboxes, and they are not permanent.
+
+Here is how the token lifecycle works in practice:
+
+<Steps>
+  <Step title="You authenticate to the control plane">
+    Your SDK uses your API key or OIDC bearer token to talk to the control plane. This credential never goes anywhere near the sandbox itself.
+  </Step>
+  <Step title="The SDK obtains a capability token">
+    When you create or resume a sandbox, the control plane mints a short-lived capability token scoped to that sandbox and epoch. The SDK stores it on the sandbox handle.
+  </Step>
+  <Step title="The token is used for data-plane access">
+    Command runs, file operations, and private port access all carry the capability token, not your API key. The node runtime verifies the token before allowing any operation.
+  </Step>
+  <Step title="Tokens are refreshed automatically">
+    When a token expires, the SDK mints a fresh one and replays the request. You never have to manage token expiry in your own code.
+  </Step>
+</Steps>
+
+### Epoch scoping
+
+Pausing and resuming a sandbox creates a **new epoch**. Capability tokens from before the pause are invalid after the resume. This is intentional: it ensures that a token obtained before a pause cannot be replayed after the sandbox restarts in a new state. The SDK automatically obtains a new token after `resume()`, so this is transparent unless you hold a token outside the SDK's lifetime.
+
+<Note>
+A sandbox handle returned by `sandboxes.get()` or `sandboxes.iterate()` does not carry a pre-minted token. Call `sandbox.mintToken()` (TypeScript) or `sandbox.mint_token()` (Python) before running commands on such a handle.
+</Note>
+
+## No credentials cross the guest boundary
+
+The single most important security property: **no platform credential ever reaches code running inside the sandbox**.
+
+Your API key never goes to the node. Capability tokens are verified at the node boundary and then stripped before anything is forwarded to the in-guest agent. The code running inside your sandbox has no way to observe a token that would let it impersonate you or access other sandboxes.
+
+This is enforced structurally. The node runtime's job includes verifying tokens and removing them before forwarding to the guest — the guest never receives a token to inspect, replay, or exfiltrate.
+
+<Warning>
+Secrets you deliberately place inside a sandbox — environment variables, files, credentials your code fetches at runtime — are a different matter. If your workload writes a credential into a file inside the sandbox, that file becomes part of the sandbox state. Treat in-guest secrets with the same care you would on any other system.
+</Warning>
+
+## Port exposure security
+
+Every port inside a sandbox is **private by default**. Accessing a private port requires a valid capability token. No unauthenticated request can reach a private port, no matter what URL someone constructs.
+
+Making a port public is an explicit action, per port, that you take:
+
+```ts TypeScript
+// Make port 3000 publicly accessible (no token required)
+const exposure = await sandbox.ports.expose(3000, 'public')
+console.log(exposure.url)
+
+// Remove the public exposure — port returns to private
+await sandbox.ports.unexpose(3000)
+```
+
+```python Python
+# Make port 3000 publicly accessible (no token required)
+exposure = sandbox.ports.expose(3000, "public")
+print(exposure.url)
+
+# Remove the public exposure — port returns to private
+sandbox.ports.unexpose(3000)
+```
+
+Public exposure is recorded and auditable. Unexposing a port immediately removes the public access record; subsequent requests require a token.
+
+## Organization isolation
+
+Sandboxes and templates are owned by your organization. Other tenants on the same FissionPlane installation cannot list, access, or influence your sandboxes, even if they know a sandbox ID. The control plane enforces organization boundaries on every API call.
+
+## Dedicated node pools
+
+Sandbox nodes are labelled and tainted in Kubernetes so that only FissionPlane sandbox workloads run on them. If a workload were somehow to escape its microVM, it would land on a node that runs no other tenant's workloads — limiting the blast radius to the nodes specifically set aside for sandbox execution.
+
+## The guest-hostile assumption
+
+<Note>
+FissionPlane treats everything that comes from inside a sandbox as untrusted input. The guest agent that executes commands inside the microVM is assumed to be under the control of an adversary. Every message from the guest to the host is size-limited, rate-limited, and strictly validated. The guest never provides a value that the host uses to name a file, address a peer, or perform a privileged operation.
+
+This assumption exists because the sandbox occupant has root inside the guest. They can read memory, replace binaries, and forge messages from the guest agent. The only meaningful isolation boundary is the hardware virtualization boundary of the microVM itself.
+</Note>
+
+For the full technical breakdown of the isolation layers and threat model, see the [Architecture](/concepts/architecture) page.

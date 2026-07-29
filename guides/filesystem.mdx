@@ -1,0 +1,268 @@
+---
+title: "Read, Write, and Watch Files in FissionPlane Sandboxes"
+sidebarTitle: "Filesystem"
+description: "Use the FissionPlane filesystem API to upload, download, list, stat, move, and watch files inside a running sandbox via the data plane."
+---
+
+Every FissionPlane sandbox exposes a filesystem API through its data-plane agent. You can write bytes, read them back, list directories, inspect metadata, move entries, remove paths, and open a live watch stream over WebSocket — all without shelling out to a command. This page covers each operation in TypeScript, Python, and Rust.
+
+<Tip>
+  Filesystem operations go directly to the sandbox's data-plane agent, bypassing the control plane entirely. This keeps throughput high and latency low for workloads that transfer many files or poll directories frequently.
+</Tip>
+
+## Write a file
+
+Pass a path and a byte buffer to `files.write()`. The agent creates any missing parent directories automatically.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    import { FissionPlane } from '@fissionplane/sdk'
+
+    const client = new FissionPlane()
+    const sandbox = await client.sandboxes.create({ template: 'base' })
+
+    await sandbox.files.write(
+      '/workspace/input.txt',
+      new TextEncoder().encode('hello from FissionPlane'),
+    )
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from fissionplane import FissionPlane
+
+    client = FissionPlane()
+    sandbox = client.sandboxes.create("base")
+
+    sandbox.files.write("/workspace/input.txt", b"hello from FissionPlane")
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    sandbox
+        .files()?
+        .write("/workspace/input.txt", b"hello from FissionPlane")
+        .await?;
+    ```
+  </Tab>
+</Tabs>
+
+## Read a file
+
+`files.read()` returns the raw bytes of a file. Decode them in your application layer.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    const bytes = await sandbox.files.read('/workspace/input.txt')
+    const text = new TextDecoder().decode(bytes)
+    console.log(text)
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    data = sandbox.files.read("/workspace/input.txt")
+    print(data.decode())
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    let bytes = sandbox.files()?.read("/workspace/input.txt").await?;
+    println!("{}", String::from_utf8_lossy(&bytes));
+    ```
+  </Tab>
+</Tabs>
+
+## List a directory
+
+`files.list()` returns the entries in a directory. Each entry includes at minimum a name and a flag indicating whether it is itself a directory.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    const entries = await sandbox.files.list('/workspace')
+    for (const entry of entries) {
+      console.log(entry.name, entry.is_dir ? '(dir)' : '')
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    entries = sandbox.files.list("/workspace")
+    for entry in entries:
+        kind = "(dir)" if entry.is_dir else ""
+        print(entry.name, kind)
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    let entries = sandbox.files()?.list("/workspace").await?;
+    for entry in &entries.items {
+        println!("{} {}", entry.name, if entry.is_dir { "(dir)" } else { "" });
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Stat a file
+
+`files.stat()` returns metadata for a single path: name, byte size, whether it is a directory, and the last-modified timestamp.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    const info = await sandbox.files.stat('/workspace/input.txt')
+    console.log('name:', info.name)
+    console.log('size:', info.size, 'bytes')
+    console.log('is_dir:', info.is_dir)
+    console.log('modified_at:', info.modified_at)
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    info = sandbox.files.stat("/workspace/input.txt")
+    print("name:", info.name)
+    print("size:", info.size, "bytes")
+    print("is_dir:", info.is_dir)
+    print("modified_at:", info.modified_at)
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    let info = sandbox.files()?.stat("/workspace/input.txt").await?;
+    println!("name: {}", info.name);
+    println!("size: {} bytes", info.size);
+    println!("is_dir: {}", info.is_dir);
+    ```
+  </Tab>
+</Tabs>
+
+## Make a directory
+
+Create a directory (and any missing ancestors) with `files.makeDir()` / `files.make_dir()`.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    await sandbox.files.makeDir('/workspace/output/reports')
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    sandbox.files.make_dir("/workspace/output/reports")
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    sandbox.files()?.make_dir("/workspace/output/reports").await?;
+    ```
+  </Tab>
+</Tabs>
+
+## Move or rename a path
+
+`files.move()` / `files.move_()` (Python) moves or renames a file or directory. The destination path must not already exist.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    await sandbox.files.move('/workspace/input.txt', '/workspace/archive/input.txt')
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    sandbox.files.move(
+        "/workspace/input.txt",
+        "/workspace/archive/input.txt",
+    )
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    sandbox
+        .files()?
+        .move_("/workspace/input.txt", "/workspace/archive/input.txt")
+        .await?;
+    ```
+  </Tab>
+</Tabs>
+
+## Remove a path
+
+`files.remove()` deletes a file or an empty directory. Pass a recursive flag to delete a non-empty directory tree.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    // Remove a single file
+    await sandbox.files.remove('/workspace/archive/input.txt')
+
+    // Remove a directory tree
+    await sandbox.files.remove('/workspace/archive', { recursive: true })
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    # Remove a single file
+    sandbox.files.remove("/workspace/archive/input.txt")
+
+    # Remove a directory tree
+    sandbox.files.remove("/workspace/archive", recursive=True)
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    // Remove a single file
+    sandbox.files()?.remove("/workspace/archive/input.txt").await?;
+
+    // Remove a directory tree
+    sandbox.files()?.remove_recursive("/workspace/archive").await?;
+    ```
+  </Tab>
+</Tabs>
+
+## Watch for filesystem changes
+
+`files.watch()` opens a WebSocket connection and streams inotify events for a path. Pass `recursive: true` to include all subdirectories. Each event carries the path that changed and the kind of change (create, modify, delete, rename).
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    const watch = sandbox.files.watch('/workspace', { recursive: true })
+
+    for await (const event of watch) {
+      console.log(event.kind, event.path)
+      if (event.kind === 'delete' && event.path === '/workspace/done.marker') {
+        break
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    watch = sandbox.files.watch("/workspace", recursive=True)
+
+    for event in watch:
+        print(event.kind, event.path)
+        if event.kind == "delete" and event.path == "/workspace/done.marker":
+            break
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    use futures_util::StreamExt;
+
+    let mut watch = sandbox.files()?.watch("/workspace", true).await?;
+
+    while let Some(event) = watch.next().await {
+        let ev = event?;
+        println!("{:?} {}", ev.kind, ev.path);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  For transferring large files or binary blobs, use `files.upload()` and `files.download()` instead of `files.write()` and `files.read()`. These methods stream data in chunks and are designed for file-transfer use cases where reading the entire payload into memory at once is impractical.
+</Note>

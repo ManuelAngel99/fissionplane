@@ -1,0 +1,124 @@
+---
+title: "Functions: Serverless Code on Your Own Hardware"
+sidebarTitle: "Functions"
+description: "Deploy versioned functions from OCI images. FissionPlane starts each invocation from a warm snapshot and scales to zero between calls."
+---
+
+Functions let you deploy code once and invoke it on demand, without managing long-running processes or paying for idle compute. You package your handler in an OCI image, deploy it to FissionPlane, and invoke it over HTTPS or on a schedule. Between invocations, FissionPlane releases the compute slot entirely — scaling to zero. When a request arrives, a microVM starts from a warm snapshot in milliseconds and runs your handler to completion.
+
+Functions and [sandboxes](/concepts/sandboxes) run on the same substrate — the same Firecracker microVMs, the same immutable templates, the same capability token model — but serve different use cases. A sandbox is stateful and interactive: you create it, run a series of commands, and delete it when you're done. A function is deployed once and invoked many times: each invocation is ephemeral and isolated from every other.
+
+## How functions work
+
+<Steps>
+  <Step title="Build a template from your OCI image">
+    FissionPlane boots your image, runs any setup steps you specify, and snapshots the result as a template artifact. This is the warm snapshot every invocation will start from.
+  </Step>
+  <Step title="Deploy a function pointing at that template">
+    A function deployment binds a handler entry point to a template version. FissionPlane creates a pool of warm snapshots ready to be restored on demand.
+  </Step>
+  <Step title="Invoke the function">
+    Each invocation restores a microVM from the warm snapshot, runs your handler, and returns the result. The microVM is released when the handler exits. The next invocation gets a fresh environment.
+  </Step>
+</Steps>
+
+Because each invocation starts from the same snapshot, your handler always sees the same initial filesystem and process state. Side effects from one invocation never bleed into the next.
+
+## Deploying a function
+
+Deploy a function by pointing FissionPlane at an OCI image that contains your handler. Specify the handler entry point and, optionally, a name and runtime configuration.
+
+```ts TypeScript
+const fn = await client.functions.deploy({
+  image: 'ghcr.io/your-org/my-handler:v1.2.0',
+  name: 'data-processor',
+  handler: 'index.handler',
+})
+console.log('Deployed function:', fn.functionId)
+```
+
+```python Python
+fn = client.functions.deploy(
+    image="ghcr.io/your-org/my-handler:v1.2.0",
+    name="data-processor",
+    handler="index.handler",
+)
+print("Deployed function:", fn.function_id)
+```
+
+## Invoking a function
+
+Call a deployed function over HTTPS. FissionPlane gives each function a stable HTTPS URL. You can also invoke programmatically through the SDK.
+
+```ts TypeScript
+const response = await client.functions.invoke('data-processor', {
+  payload: { input: 'some data' },
+})
+console.log(response.result)
+```
+
+```python Python
+response = client.functions.invoke(
+    "data-processor",
+    payload={"input": "some data"},
+)
+print(response.result)
+```
+
+## Scheduling functions
+
+Invoke a function on a cron schedule for periodic jobs — nightly reports, cache warming, data pipeline triggers, and similar workloads.
+
+```ts TypeScript
+await client.functions.schedule('data-processor', {
+  cron: '0 2 * * *',  // Every day at 02:00 UTC
+})
+```
+
+```python Python
+client.functions.schedule(
+    "data-processor",
+    cron="0 2 * * *",  # Every day at 02:00 UTC
+)
+```
+
+## Versioning and rollback
+
+Every deployment creates a new version. Versions are immutable: deploying new code does not change existing versions. You can roll back to any previous version with a single call, making it safe to deploy frequently and revert quickly.
+
+```ts TypeScript
+// List versions of a function
+const versions = await client.functions.listVersions('data-processor')
+
+// Roll back to a specific version
+await client.functions.setActive('data-processor', { version: versions[1].versionId })
+```
+
+```python Python
+# List versions of a function
+versions = client.functions.list_versions("data-processor")
+
+# Roll back to a specific version
+client.functions.set_active("data-processor", version=versions[1].version_id)
+```
+
+## Use cases
+
+<CardGroup cols={2}>
+  <Card title="Serverless APIs" icon="globe">
+    Put your handler behind a stable HTTPS endpoint. FissionPlane scales it down to zero between requests and back up in milliseconds when traffic arrives.
+  </Card>
+  <Card title="Scheduled jobs" icon="clock">
+    Run functions on a cron schedule. Each execution gets a clean, isolated microVM — no accumulated state, no dependency on previous runs.
+  </Card>
+  <Card title="Batch processing" icon="layers">
+    Fan out work across many function invocations in parallel. Each runs in isolation and exits when complete.
+  </Card>
+  <Card title="Webhooks and event handlers" icon="bolt">
+    Wire up a function to any HTTPS webhook. Handle events without maintaining a long-running service.
+  </Card>
+</CardGroup>
+
+<Note>
+Functions are on the FissionPlane roadmap. The architecture and API shape described here reflect planned behavior. If you need an interactive, stateful environment today, [sandboxes](/concepts/sandboxes) are the right primitive — you can run a command in a sandbox, collect the result, and delete it, achieving a similar one-shot execution pattern with the current stable API.
+</Note>

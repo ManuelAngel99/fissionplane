@@ -1,0 +1,225 @@
+---
+title: "Pause and Resume Sandboxes with Full State Preserved"
+sidebarTitle: "Pause & Resume"
+description: "Save a sandbox to object storage and resume it later with memory, processes, and files intact. Deadlines can be extended to keep a sandbox running longer."
+---
+
+FissionPlane can snapshot a running sandbox to object storage and restore it on demand. The full in-memory state, all running processes, and the complete filesystem are preserved across a pause/resume cycle. Pausing releases the node capacity the sandbox was occupying, so you only pay for compute while a sandbox is actually running.
+
+## What pause and resume do
+
+When you call `pause()`, the platform takes a complete memory snapshot of the sandbox microVM, writes it to object storage, and releases the Kubernetes node resources it was using. The sandbox state transitions from `running` to `paused`. No data is lost: processes are frozen in place, open file descriptors are captured, and the filesystem is included in the snapshot.
+
+When you call `resume()`, the platform locates a healthy node, restores the snapshot onto it, and restarts the microVM from the saved state. The sandbox receives a new **epoch** — a monotonic counter that identifies this particular run of the snapshot. All previously running processes continue from exactly where they were frozen.
+
+## Sandbox states
+
+A sandbox moves through these states during its lifecycle:
+
+| State | Meaning |
+|-------|---------|
+| `running` | The sandbox is live on a node and accepting requests |
+| `paused` | The snapshot is in object storage; no node resources are consumed |
+| `terminated` | The sandbox was deleted; state is not recoverable |
+| `failed` | The sandbox encountered an unrecoverable error |
+
+`terminated` and `failed` are terminal — you cannot resume a sandbox in either of these states.
+
+## Pausing a sandbox
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    import { FissionPlane } from '@fissionplane/sdk'
+
+    const client = new FissionPlane()
+    const sandbox = await client.sandboxes.create({
+      template: 'base',
+      deadline_seconds: 600,
+    })
+
+    // ... do work ...
+
+    await sandbox.pause()
+    console.log('Sandbox paused. Node capacity released.')
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from fissionplane import FissionPlane
+
+    client = FissionPlane()
+    sandbox = client.sandboxes.create("base", deadline_seconds=600)
+
+    # ... do work ...
+
+    sandbox.pause()
+    print("Sandbox paused. Node capacity released.")
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    use fissionplane::{ClientOptions, FissionPlane};
+    use fissionplane::models::CreateSandboxRequest;
+
+    let client = FissionPlane::new(ClientOptions::new())?;
+    let mut sandbox = client
+        .sandboxes()
+        .create(
+            CreateSandboxRequest {
+                template: "base".to_owned(),
+                deadline_seconds: Some(600),
+                ..Default::default()
+            },
+            None,
+        )
+        .await?;
+
+    // ... do work ...
+
+    sandbox.pause().await?;
+    println!("Sandbox paused. Node capacity released.");
+    ```
+  </Tab>
+</Tabs>
+
+## Resuming a sandbox
+
+Pass `deadlineSeconds` / `deadline_seconds` to set how long the resumed sandbox should run before it auto-pauses or terminates.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    // Resume and give the sandbox 10 more minutes
+    await sandbox.resume({ deadlineSeconds: 600 })
+    console.log('Sandbox is running again')
+
+    // Commands are ready immediately after resume
+    const result = await sandbox.commands.run('echo', { args: ['back online'] })
+    console.log(result.stdout)
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    # Resume and give the sandbox 10 more minutes
+    sandbox.resume(deadline_seconds=600)
+    print("Sandbox is running again")
+
+    # Commands are ready immediately after resume
+    result = sandbox.commands.run("echo", args=["back online"])
+    print(result.stdout)
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    // Resume and give the sandbox 10 more minutes
+    sandbox.resume(Some(600)).await?;
+    println!("Sandbox is running again");
+
+    // Commands are ready immediately after resume
+    let result = sandbox
+        .commands()?
+        .run(fissionplane::models::RunCommandRequest {
+            command: "echo".to_owned(),
+            args: Some(vec!["back online".to_owned()]),
+            ..Default::default()
+        })
+        .await?;
+    println!("{}", result.stdout);
+    ```
+  </Tab>
+</Tabs>
+
+## Extending a deadline
+
+Call `extendDeadline()` / `extend_deadline()` on a **running** sandbox before its deadline expires to buy more time. Pass the number of seconds to add.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    // Add 15 more minutes to the deadline
+    await sandbox.extendDeadline(900)
+    console.log('Deadline extended by 15 minutes')
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    # Add 15 more minutes to the deadline
+    sandbox.extend_deadline(900)
+    print("Deadline extended by 15 minutes")
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    // Add 15 more minutes to the deadline
+    sandbox.extend_deadline(900).await?;
+    println!("Deadline extended by 15 minutes");
+    ```
+  </Tab>
+</Tabs>
+
+## Epochs and capability tokens
+
+Capability tokens are scoped to a single sandbox **epoch**. When you resume a sandbox, it starts a new epoch and the old capability token becomes invalid. The SDK automatically replaces the token on the sandbox handle after `resume()` completes, so you can call commands and file operations right away without any extra token management.
+
+A handle returned by `sandboxes.get()` or `sandboxes.iterate()` (TypeScript/Python) / `Sandboxes::get()` or `Sandboxes::list()` (Rust) has **no token** — it was fetched from the control plane, which does not issue data-plane tokens. Call `mintToken()` / `mint_token()` / `Sandbox::mint_token()` before using commands or filesystem operations on such a handle.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    // A handle from get() has no token
+    const handle = await client.sandboxes.get('sbx-abc123')
+
+    // Mint a token before calling data-plane operations
+    await handle.mintToken()
+
+    const result = await handle.commands.run('date')
+    console.log(result.stdout)
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    # A handle from get() has no token
+    handle = client.sandboxes.get("sbx-abc123")
+
+    # Mint a token before calling data-plane operations
+    handle.mint_token()
+
+    result = handle.commands.run("date")
+    print(result.stdout)
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    // A handle from get() has no token
+    let mut handle = client.sandboxes().get("sbx-abc123").await?;
+
+    // Mint a token before calling data-plane operations
+    handle.mint_token().await?;
+
+    let result = handle
+        .commands()?
+        .run(fissionplane::models::RunCommandRequest {
+            command: "date".to_owned(),
+            ..Default::default()
+        })
+        .await?;
+    println!("{}", result.stdout);
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  Use an idempotency key when creating sandboxes in code that may retry. The same key always returns the sandbox from the first successful creation request, so retries are safe even after network errors.
+
+  ```ts
+  const sandbox = await client.sandboxes.create(
+    { template: 'base', deadline_seconds: 600 },
+    { idempotencyKey: 'my-job-run-42' },
+  )
+  ```
+</Note>
+
+<Tip>
+  Pause sandboxes that are waiting for external events — such as user input, a webhook callback, or a scheduled job trigger. You release node capacity immediately, pay nothing while the sandbox is paused, and resume in seconds with full state intact when the event arrives.
+</Tip>

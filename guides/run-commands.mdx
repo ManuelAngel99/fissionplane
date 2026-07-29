@@ -1,0 +1,302 @@
+---
+title: "Run Commands and Stream Process Output in Sandboxes"
+sidebarTitle: "Run Commands"
+description: "Execute blocking commands, start background processes with PTY support, stream stdout and stderr, and send signals inside FissionPlane sandboxes."
+---
+
+Every FissionPlane sandbox exposes a command API through its data-plane agent. You can run a one-shot command and wait for its result, start a long-lived background process and stream its output in real time, send stdin, list all supervised processes, or signal any of them by PID. This page walks through each of those patterns in TypeScript, Python, and Rust.
+
+## Blocking commands
+
+Use `commands.run()` when you want to execute a command and wait for it to finish before continuing. The call blocks until the process exits and returns the full `exit_code`, `stdout`, and `stderr`. An optional `truncated` flag indicates whether the output was cut short by the platform.
+
+Pass `timeoutSeconds` (TypeScript/Rust) or `timeout_seconds` (Python) to set a maximum wall-clock limit for the command.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    import { FissionPlane } from '@fissionplane/sdk'
+
+    const client = new FissionPlane()
+    const sandbox = await client.sandboxes.create({ template: 'base' })
+
+    const result = await sandbox.commands.run('python3', {
+      args: ['-c', "print('hello from FissionPlane')"],
+      timeoutSeconds: 30,
+    })
+
+    console.log('exit code:', result.exit_code)
+    console.log('stdout:', result.stdout)
+    console.log('stderr:', result.stderr)
+    if (result.truncated) {
+      console.warn('output was truncated')
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from fissionplane import FissionPlane
+
+    client = FissionPlane()
+    sandbox = client.sandboxes.create("base")
+
+    result = sandbox.commands.run(
+        "python3",
+        args=["-c", "print('hello from FissionPlane')"],
+        timeout_seconds=30,
+    )
+
+    print("exit code:", result.exit_code)
+    print("stdout:", result.stdout)
+    print("stderr:", result.stderr)
+    if result.truncated:
+        print("warning: output was truncated")
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    use fissionplane::models::{CreateSandboxRequest, RunCommandRequest};
+    use fissionplane::{ClientOptions, FissionPlane};
+
+    #[tokio::main]
+    async fn main() -> Result<(), fissionplane::Error> {
+        let client = FissionPlane::new(ClientOptions::new())?;
+        let sandbox = client
+            .sandboxes()
+            .create(
+                CreateSandboxRequest {
+                    template: "base".to_owned(),
+                    ..Default::default()
+                },
+                None,
+            )
+            .await?;
+
+        let result = sandbox
+            .commands()?
+            .run(RunCommandRequest {
+                command: "python3".to_owned(),
+                args: Some(vec![
+                    "-c".to_owned(),
+                    "print('hello from FissionPlane')".to_owned(),
+                ]),
+                timeout_seconds: Some(30),
+                ..Default::default()
+            })
+            .await?;
+
+        println!("exit code: {}", result.exit_code);
+        println!("stdout: {}", result.stdout);
+        Ok(())
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  When `timeoutSeconds` expires, FissionPlane terminates the process and throws a command-timeout error. Catch it with `CommandTimeoutError` (TypeScript/Python) or match on `fissionplane::Error` (Rust) to handle timeouts gracefully in your application logic.
+</Note>
+
+## Background processes
+
+Use `commands.start()` when you need to keep the process running while streaming its output or sending it input over time. Optionally request a PTY — pass `pty: { cols, rows }` to allocate a pseudo-terminal with the specified dimensions. Call `attach()` (or `process.attach(0)` in Rust) on the returned handle to get an iterable stream of events.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    const child = await sandbox.commands.start('bash', {
+      pty: { cols: 120, rows: 40 },
+    })
+
+    const attachment = child.attach()
+
+    for await (const event of attachment) {
+      if (event.type === 'stdout') {
+        process.stdout.write(event.data)
+      }
+      if (event.type === 'exit') {
+        console.log('process exited with code', event.exitCode)
+        break
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from fissionplane import FissionPlane, PtySize
+
+    client = FissionPlane()
+    sandbox = client.sandboxes.create("base")
+
+    process = sandbox.commands.start("bash", pty=PtySize(cols=120, rows=40))
+    attachment = process.attach()
+
+    for event in attachment:
+        if event.type == "stdout":
+            print(event.data, end="", flush=True)
+        elif event.type == "exit":
+            print(f"\nprocess exited with code {event.exit_code}")
+            break
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    use futures_util::StreamExt;
+    use fissionplane::models::{ProcessStreamEvent, PtySize, StartProcessRequest};
+
+    let process = sandbox
+        .commands()?
+        .start(StartProcessRequest {
+            command: "bash".to_owned(),
+            pty: Some(PtySize { cols: 120, rows: 40 }),
+            ..Default::default()
+        })
+        .await?;
+
+    let mut attachment = process.attach(0).await?;
+
+    while let Some(event) = attachment.next().await {
+        if matches!(event?, ProcessStreamEvent::Exit { .. }) {
+            break;
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Sending stdin
+
+After calling `attach()`, send input to the process using `sendInput()` / `send_input()`. This is especially useful for interactive shells and REPL-based workflows.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    const child = await sandbox.commands.start('bash', {
+      pty: { cols: 120, rows: 40 },
+    })
+    const attachment = child.attach()
+
+    // Send a command to the shell
+    attachment.sendInput('echo "hello from stdin"\n')
+    attachment.sendInput('pwd\n')
+    attachment.sendInput('exit\n')
+
+    for await (const event of attachment) {
+      if (event.type === 'stdout') process.stdout.write(event.data)
+      if (event.type === 'exit') break
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    process = sandbox.commands.start("bash", pty=PtySize(cols=120, rows=40))
+    attachment = process.attach()
+
+    # Send commands to the shell
+    attachment.send_input('echo "hello from stdin"\n')
+    attachment.send_input("pwd\n")
+    attachment.send_input("exit\n")
+
+    for event in attachment:
+        if event.type == "stdout":
+            print(event.data, end="", flush=True)
+        elif event.type == "exit":
+            break
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    let mut attachment = process.attach(0).await?;
+
+    // Send commands to the shell
+    attachment.send_input("echo \"hello from stdin\"\n").await?;
+    attachment.send_input("pwd\n").await?;
+    attachment.send_input("exit\n").await?;
+
+    while let Some(event) = attachment.next().await {
+        if matches!(event?, ProcessStreamEvent::Exit { .. }) {
+            break;
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Listing processes
+
+Call `commands.listProcesses()` / `list_processes()` / `Commands::list_processes()` to get a snapshot of all processes currently supervised by the data-plane agent in this sandbox.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    const processes = await sandbox.commands.listProcesses()
+    for (const proc of processes) {
+      console.log(`PID ${proc.pid}: ${proc.command}`)
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    processes = sandbox.commands.list_processes()
+    for proc in processes:
+        print(f"PID {proc.pid}: {proc.command}")
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    let processes = sandbox.commands()?.list_processes().await?;
+    for proc in &processes.items {
+        println!("PID {}: {}", proc.pid, proc.command);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Killing a process
+
+Send a signal to a specific process by PID using `commands.kill()` / `Commands::kill()`. Pass the PID and a signal name such as `"SIGTERM"` or `"SIGKILL"`.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    const processes = await sandbox.commands.listProcesses()
+    const target = processes[0]
+
+    // Graceful shutdown first
+    await sandbox.commands.kill(target.pid, 'SIGTERM')
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    processes = sandbox.commands.list_processes()
+    target = processes[0]
+
+    # Graceful shutdown first
+    sandbox.commands.kill(target.pid, "SIGTERM")
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    use fissionplane::models::Signal;
+
+    let processes = sandbox.commands()?.list_processes().await?;
+    if let Some(target) = processes.items.first() {
+        sandbox
+            .commands()?
+            .kill(target.pid, Some(Signal::Term))
+            .await?;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  Pass an `idempotencyKey` (TypeScript) or `idempotency_key` (Python/Rust) when creating your sandbox so that retried creation attempts return the same sandbox. This is especially useful in job-runner patterns where your orchestrator may restart a task before it confirms the sandbox was created.
+
+  ```ts
+  const sandbox = await client.sandboxes.create(
+    { template: 'base', name: 'my-job' },
+    { idempotencyKey: 'my-job-run-42' },
+  )
+  ```
+</Tip>

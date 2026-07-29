@@ -1,0 +1,262 @@
+---
+title: "FissionPlane TypeScript SDK Reference"
+sidebarTitle: "TypeScript"
+description: "Install and configure the @fissionplane/sdk package for Node.js. Manage sandboxes, run commands, stream process I/O, and build templates from TypeScript."
+---
+
+The `@fissionplane/sdk` package connects your TypeScript and Node.js applications to a self-hosted FissionPlane installation. You can create and control isolated Firecracker microVM sandboxes, run commands, stream process output, manage files, expose ports, and build templates — all from a fully typed client.
+
+## Requirements
+
+Before you install the SDK, make sure you have:
+
+- Node.js 20 or later
+- A running FissionPlane control plane and its URL
+- An API key or OIDC bearer token
+- A template alias or template artifact ID to use when creating sandboxes
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @fissionplane/sdk
+```
+
+```bash pnpm
+pnpm add @fissionplane/sdk
+```
+</CodeGroup>
+
+## Configuration
+
+Set your control plane URL and API key as environment variables so the client can pick them up automatically:
+
+```bash
+export FISSIONPLANE_API_URL="https://api.sandbox.example.com"
+export FISSIONPLANE_API_KEY="your-api-key"
+```
+
+Then construct the client with no arguments:
+
+```ts
+import { FissionPlane } from '@fissionplane/sdk'
+
+const client = new FissionPlane()
+```
+
+You can also pass values directly to the constructor:
+
+```ts
+const client = new FissionPlane({
+  baseUrl: 'https://api.sandbox.example.com',
+  apiKey: 'your-api-key',
+})
+```
+
+Use `accessToken` instead of `apiKey` when authenticating with an OIDC bearer token. When you supply both, `apiKey` takes precedence. The constructor rejects an empty credential or one that contains whitespace.
+
+### Client Options
+
+<ParamField body="baseUrl" type="string">
+  The URL of your FissionPlane control plane. Reads from the `FISSIONPLANE_API_URL` environment variable when not provided.
+</ParamField>
+
+<ParamField body="apiKey" type="string">
+  Your API key. Reads from the `FISSIONPLANE_API_KEY` environment variable when not provided. Takes precedence over `accessToken`.
+</ParamField>
+
+<ParamField body="accessToken" type="string">
+  An OIDC bearer token. Used when `apiKey` is not set.
+</ParamField>
+
+<ParamField body="requestTimeoutMs" type="number" default="60000">
+  Milliseconds before a request is aborted. Set to `0` to disable timeouts entirely.
+</ParamField>
+
+<ParamField body="maxRetries" type="number" default="2">
+  Number of additional attempts after a failed request. The SDK spaces retries using exponential backoff with full jitter, starting at 250 ms. Set to `0` to disable retries. `sandboxes.create()` is retried only when you pass an `idempotencyKey`.
+</ParamField>
+
+<ParamField body="logger" type="Logger">
+  An object with optional `debug`, `info`, `warn`, and `error` methods. Receives messages about retries, capability token re-mints, and pagination. Passing `console` works as-is. The default logger discards all output.
+</ParamField>
+
+### Per-Call Overrides
+
+Every method accepts `requestTimeoutMs`, `signal`, and `headers` alongside its own parameters. A per-call `requestTimeoutMs` replaces the client default for that call only.
+
+```ts
+const controller = new AbortController()
+
+const sandbox = await client.sandboxes.get('sbx-1', {
+  requestTimeoutMs: 5_000,
+  signal: controller.signal,
+  headers: { 'X-Trace-Id': trace },
+})
+```
+
+<Note>
+  On `commands.attach()` and `files.watch()`, `requestTimeoutMs` bounds the WebSocket handshake rather than the lifetime of the stream. Pass `signal` to close the stream itself. Your own headers win over the SDK's defaults.
+</Note>
+
+## Create a Sandbox and Run a Command
+
+Sandbox creation returns after a node acknowledges the sandbox. Use `commands.run()` when you need the command's full output after it finishes.
+
+```ts
+import { FissionPlane } from '@fissionplane/sdk'
+
+const client = new FissionPlane()
+const sandbox = await client.sandboxes.create(
+  {
+    template: 'base',
+    name: 'example-job',
+    deadline_seconds: 600,
+  },
+  { idempotencyKey: 'example-job-1' },
+)
+
+try {
+  const result = await sandbox.commands.run('node', {
+    args: ['--eval', "console.log('hello from FissionPlane')"],
+    timeoutSeconds: 30,
+  })
+  console.log(result.stdout)
+  console.log(result.exit_code)
+} finally {
+  await sandbox.delete()
+}
+```
+
+`commands.run()` waits for the process to exit and returns its exit code, standard output, standard error, and an optional truncation flag. Use `sandbox.commands.listProcesses()` to list supervised processes, and `sandbox.commands.kill(pid, 'SIGTERM')` to send a signal to one.
+
+## Background Processes and PTY
+
+When you need to follow output in real time or keep stdin open, start a background process with `commands.start()`. Pass a `pty` option to allocate a pseudo-terminal.
+
+```ts
+const child = await sandbox.commands.start('bash', {
+  pty: { cols: 120, rows: 40 },
+})
+const attachment = child.attach()
+attachment.sendInput('pwd\n')
+
+for await (const event of attachment) {
+  if (event.type === 'stdout') console.log(event.data)
+  if (event.type === 'exit') break
+}
+```
+
+The attachment is an async iterable of typed events. Break out of the loop at any time to stop consuming output.
+
+## Filesystem Operations
+
+Filesystem calls go directly to the sandbox data plane. You can create directories, upload content, list entries, and watch for changes.
+
+```ts
+await sandbox.files.makeDir('/workspace')
+await sandbox.files.write(
+  '/workspace/input.txt',
+  new TextEncoder().encode('hello'),
+)
+const entries = await sandbox.files.list('/workspace')
+const watch = sandbox.files.watch('/workspace', { recursive: true })
+```
+
+## Sandbox Lifecycle
+
+A sandbox moves through four visible states: `running`, `paused`, `terminated`, and `failed`.
+
+```ts
+await sandbox.pause()
+await sandbox.resume({ deadlineSeconds: 600 })
+await sandbox.extendDeadline(900)
+await sandbox.delete()
+```
+
+`pause()` snapshots the sandbox and releases the underlying node capacity. `resume()` restores the snapshot on a node and gives the sandbox a new epoch.
+
+<Note>
+  Capability tokens are scoped to a single sandbox epoch. After `resume()`, the SDK automatically replaces the token on the handle. Handles returned by `sandboxes.get()` or `sandboxes.iterate()` carry no token — call `sandbox.mintToken()` before issuing commands on them. When the data plane rejects an expired token, the SDK mints a replacement and replays the request once automatically. Streams opened by `commands.attach()` and `files.watch()` require a valid token up front because a rejected WebSocket handshake is opaque to the SDK.
+</Note>
+
+Pass an `idempotencyKey` to `sandboxes.create()` so that retries return the same sandbox instead of creating a duplicate.
+
+## Port Exposure
+
+Every sandbox port is private by default, accessible only with a capability token. Make a port public only when anonymous access is required.
+
+```ts
+const exposure = await sandbox.ports.expose(3000, 'public')
+console.log(exposure.url)
+
+const records = await sandbox.ports.list()
+await sandbox.ports.unexpose(3000)
+```
+
+`unexpose()` removes the exposure record and returns the port to private access.
+
+## Build and Use a Template
+
+Template builds run asynchronously on your FissionPlane installation. Start a build, wait for it to finish, then reference the template by alias.
+
+```ts
+const build = await client.templates.build({
+  image: 'node:22',
+  alias: 'node-tools',
+  steps: [{ command: 'npm install --global pnpm' }],
+})
+
+const template = await build.wait({ timeoutMs: 10 * 60 * 1000 })
+const sandbox = await client.sandboxes.create({ template: 'node-tools' })
+```
+
+Stream build output with `build.logs(offset)`. Pass `nextOffset` from each response into the next call to avoid re-reading lines. Use `client.templates.getBuild(buildId)` to reconnect to a build started in a previous process.
+
+## List Sandboxes
+
+Read a single page of sandboxes filtered by state or metadata:
+
+```ts
+const page = await client.sandboxes.list({
+  state: 'running',
+  metadata: { team: 'tools' },
+  limit: 20,
+})
+```
+
+Use `iterate()` to walk every page automatically. The SDK fetches the next page only when the previous one is exhausted, and it follows each page's `nextCursor` until the collection ends.
+
+```ts
+for await (const sandbox of client.sandboxes.iterate({ state: 'running' })) {
+  console.log(sandbox.sandboxId)
+}
+```
+
+`iterate()` accepts the same filters as `list()` except `cursor`. Break out of the loop to stop early.
+
+## Error Handling
+
+All SDK errors inherit from `FissionPlaneError`. HTTP errors carry `status`, `code`, `retryable`, and `requestId` when the server provides them.
+
+```ts
+import { FissionPlaneError, RateLimitError } from '@fissionplane/sdk'
+
+try {
+  await client.sandboxes.create({ template: 'base' })
+} catch (error: unknown) {
+  if (error instanceof RateLimitError && error.retryable) {
+    console.error(`retry later; request ID: ${error.requestId}`)
+  } else if (error instanceof FissionPlaneError) {
+    console.error(error.code, error.message)
+  } else {
+    throw error
+  }
+}
+```
+
+The package also exports typed errors for authentication failures, authorization denials, missing resources, lifecycle conflicts, expired snapshots, command timeouts, and failed template builds.
+
+<Note>
+  `@fissionplane/sdk` is version `0.0.1`. The public API is unstable and may change without notice until the project publishes a stable release.
+</Note>

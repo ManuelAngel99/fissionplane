@@ -1,0 +1,86 @@
+---
+title: "FissionPlane: Self-Hosted Firecracker Sandbox Platform"
+sidebarTitle: "Introduction"
+description: "FissionPlane runs AI agents, code interpreters, and CI jobs in isolated Firecracker microVMs on your own Kubernetes cluster. No cloud lock-in."
+---
+
+FissionPlane is an open-source, self-hosted compute platform for untrusted code. It gives AI agents, code interpreters, developer tools, and CI systems a secure place to run — on hardware you operate. Every workload executes in a Firecracker microVM with its own kernel, filesystem, network namespace, and resource limits, so nothing from one workload can reach another or the host. A single Helm chart installs the entire platform into an existing Kubernetes cluster; no operator, no custom resources, and no proprietary cloud service required.
+
+FissionPlane supports two workload types on one shared substrate of immutable templates, microVM snapshots, and short-lived capability tokens. **Sandboxes** are stateful, interactive Linux environments: you create one, run commands, edit files, expose ports, and delete it when you're done. **Functions** are deployed once and invoked many times — FissionPlane starts each invocation from a warm snapshot in milliseconds and scales back to zero when idle. Both types are managed through the same SDKs and OpenAPI contracts.
+
+## Key capabilities
+
+<CardGroup cols={2}>
+  <Card title="Hardware isolation" icon="shield-halved">
+    Each workload runs in a Firecracker microVM with its own kernel, filesystem, and network namespace. FissionPlane treats every byte from the guest as hostile.
+  </Card>
+  <Card title="Pause and resume" icon="circle-pause">
+    Pause a sandbox to object storage and resume its memory, processes, and files exactly where they stopped — on any node.
+  </Card>
+  <Card title="SDK-driven control" icon="code">
+    Manage sandboxes and functions from TypeScript, Python, or Rust against shared, fully typed OpenAPI contracts.
+  </Card>
+  <Card title="Fully self-hosted" icon="server">
+    The control plane, data plane, and compute run on your infrastructure. No data leaves your network, and air-gapped installs work out of the box.
+  </Card>
+  <Card title="Kubernetes-native" icon="dharmachakra">
+    One Helm chart installs into any existing cluster — EKS, GKE, AKS, k3s, bare metal, or air-gapped. No cluster-wide changes required.
+  </Card>
+  <Card title="Resilient data path" icon="network-wired">
+    Running workloads continue through a control-plane outage. The control plane never proxies workload traffic.
+  </Card>
+</CardGroup>
+
+## What you can build
+
+<CardGroup cols={2}>
+  <Card title="AI agents" icon="robot">
+    Give each agent a full Linux workspace with its own kernel. Run tool calls, write files, and expose services — in complete isolation.
+  </Card>
+  <Card title="Code interpreters" icon="terminal">
+    Execute model-generated code safely. Return files, charts, logs, and exit codes to the caller without risk to your host.
+  </Card>
+  <Card title="Serverless APIs" icon="bolt">
+    Deploy functions behind HTTPS endpoints that start from warm snapshots and scale to zero between requests.
+  </Card>
+  <Card title="CI and build jobs" icon="hammer">
+    Run each job in a clean microVM. Destroy it when the job ends. No state leaks between runs.
+  </Card>
+  <Card title="Data analysis" icon="chart-bar">
+    Analyze untrusted datasets in isolation, co-located with your data. Nothing escapes the microVM boundary.
+  </Card>
+  <Card title="Scheduled jobs" icon="clock">
+    Invoke functions on a cron schedule on your own hardware. No third-party scheduler service required.
+  </Card>
+</CardGroup>
+
+## Start here
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Install the SDK, connect to your control plane, and run a command inside a Firecracker microVM in minutes.
+  </Card>
+  <Card title="Sandboxes" icon="box" href="/concepts/sandboxes">
+    Learn how sandboxes are created, paused, resumed, and deleted, and how the lifecycle state machine works.
+  </Card>
+  <Card title="Functions" icon="function" href="/concepts/functions">
+    Understand how to deploy, invoke, version, and roll back serverless functions on FissionPlane.
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Explore the four planes — control, gateway, node runtime, and guest — and how they interact.
+  </Card>
+</CardGroup>
+
+## SDKs
+
+<CardGroup cols={2}>
+  <Card title="TypeScript SDK" icon="js" href="/sdks/typescript">
+    Use `@fissionplane/sdk` in Node.js 20+ applications. Supports ESM, CommonJS, full types, and streaming.
+  </Card>
+  <Card title="Python SDK" icon="python" href="/sdks/python">
+    Use `fissionplane` in Python 3.10+ applications. Both synchronous and `asyncio`-based clients included.
+  </Card>
+  <Card title="Rust SDK" icon="rust" href="/sdks/rust">
+    Use the `fissionplane` crate in Tokio-based applications. Async-first with typed errors and tracing support.
+  </Card>
+</CardGroup>

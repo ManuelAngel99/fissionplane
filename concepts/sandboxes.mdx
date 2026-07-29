@@ -1,7 +1,7 @@
 ---
 title: "Sandboxes: Stateful Firecracker Linux Environments"
 sidebarTitle: "Sandboxes"
-description: "Sandboxes are isolated Linux environments in Firecracker microVMs. Each has its own kernel, filesystem, and network. Create, pause, resume, and delete on demand."
+description: "Sandboxes run in Firecracker microVMs with their own kernel, filesystem, and network namespace. Create, pause, resume, and delete on demand from the SDK."
 ---
 
 A sandbox is a full Linux environment running inside a Firecracker microVM. Each sandbox boots its own kernel, owns a private filesystem, and sits in an isolated network namespace. Nothing is shared with the host or with any other sandbox. You create a sandbox from a [template](/concepts/templates), run commands, read and write files, and delete it when you're done — all through the SDK or REST API. Sandboxes are the right primitive when you need an interactive, stateful workspace: AI agents, code interpreters, CI jobs, and data analysis tasks are common fits.

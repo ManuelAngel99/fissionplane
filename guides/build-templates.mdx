@@ -1,7 +1,7 @@
 ---
-title: "Build Custom Templates from OCI Images"
+title: "Build FissionPlane Templates from Any OCI Container Image"
 sidebarTitle: "Build Templates"
-description: "Build a FissionPlane template from any OCI image with declarative build steps. Sandboxes created from the template start in milliseconds from a pre-booted state."
+description: "Build a template from any OCI image with declarative steps. Sandboxes start in milliseconds from the pre-booted snapshot instead of a cold boot."
 ---
 
 A FissionPlane template is a pre-booted microVM snapshot derived from any OCI container image. When you create a sandbox from a template, the platform restores that snapshot rather than booting a fresh VM — so startup is measured in milliseconds instead of seconds. Templates are immutable artifacts: once built, a template never changes. You reference them by an artifact ID or by a mutable alias that you control.

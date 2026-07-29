@@ -1,5 +1,5 @@
 ---
-title: "FissionPlane TypeScript SDK Reference"
+title: "TypeScript SDK for FissionPlane Sandboxes and Templates"
 sidebarTitle: "TypeScript"
 description: "Install and configure the @fissionplane/sdk package for Node.js. Manage sandboxes, run commands, stream process I/O, and build templates from TypeScript."
 ---
@@ -80,6 +80,8 @@ Use `accessToken` instead of `apiKey` when authenticating with an OIDC bearer to
 <ParamField body="logger" type="Logger">
   An object with optional `debug`, `info`, `warn`, and `error` methods. Receives messages about retries, capability token re-mints, and pagination. Passing `console` works as-is. The default logger discards all output.
 </ParamField>
+
+Every request carries `User-Agent: fissionplane-typescript/<version>`. The SDK exports this string as `userAgent` if you need it in your own logging or tracing.
 
 ### Per-Call Overrides
 
@@ -256,6 +258,16 @@ try {
 ```
 
 The package also exports typed errors for authentication failures, authorization denials, missing resources, lifecycle conflicts, expired snapshots, command timeouts, and failed template builds.
+
+## Control Plane and Data Plane
+
+The control plane manages sandboxes, ports, tokens, and templates. The sandbox data plane runs commands, streams process I/O, and accesses files.
+
+The SDK sends your API key or OIDC token to the control plane. It sends a short-lived capability token to the sandbox data plane, stored on the sandbox handle.
+
+The data-plane agent uses port `50000` by default. Set `agentPort` in the client options only when your installation uses a different port. You can also supply a custom `fetch` implementation in the client options.
+
+`client.api` exposes the generated, fully typed HTTP client for operations not wrapped by the SDK. Those calls carry your credentials, the SDK `User-Agent`, and the request timeout, but not the retry loop.
 
 <Note>
   `@fissionplane/sdk` is version `0.0.1`. The public API is unstable and may change without notice until the project publishes a stable release.

@@ -1,5 +1,5 @@
 ---
-title: "Get started with FissionPlane in minutes"
+title: "FissionPlane Quickstart: Your First Sandbox in Minutes"
 sidebarTitle: "Quickstart"
 description: "Install the FissionPlane SDK, connect to your control plane, create your first sandbox, and run a command inside a Firecracker microVM."
 ---
@@ -175,7 +175,7 @@ This guide walks you through the full path from a fresh SDK install to running a
     </Tabs>
 
     <Note>
-      Sandboxes are deleted automatically when their deadline expires. The `deadline_seconds` value above gives the sandbox ten minutes. You can extend the deadline at any time with `sandbox.extendDeadline()` (TypeScript), `sandbox.extend_deadline()` (Python), or `sandbox.extend_deadline()` (Rust).
+      Sandboxes are terminated automatically when their deadline expires. The `deadline_seconds` value above gives the sandbox ten minutes. You can extend the deadline at any time with `sandbox.extendDeadline()` (TypeScript), `sandbox.extend_deadline()` (Python), or `sandbox.extend_deadline()` (Rust).
     </Note>
 
   </Step>

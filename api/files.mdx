@@ -12,7 +12,7 @@ All file endpoints use the sandbox-specific data plane base URL:
 https://50000-<sandbox-id>.<your-domain>
 ```
 
-Authenticate every request with a capability token in the `Authorization: Bearer` header. See [Tokens](/api/tokens) to learn how to mint one.
+Authenticate every request with a capability token in the `X-Sandbox-Token` header. See [Tokens](/api/tokens) to learn how to mint one.
 
 Paths can be absolute (e.g. `/workspace/app.js`) or relative to the default user's home directory. The `path` parameter is required on every endpoint that operates on a specific path.
 
@@ -24,7 +24,7 @@ Lists the contents of a directory. Returns metadata for each entry but not the f
 
 ```bash
 curl "https://50000-<sandbox-id>.sandboxes.example.com/files?path=/workspace" \
-  -H "Authorization: Bearer <capability-token>"
+  -H "X-Sandbox-Token: <capability-token>"
 ```
 
 **Query parameters**
@@ -69,7 +69,7 @@ Reads the metadata of a single file or directory without returning its contents.
 
 ```bash
 curl "https://50000-<sandbox-id>.sandboxes.example.com/files/stat?path=/workspace/app.js" \
-  -H "Authorization: Bearer <capability-token>"
+  -H "X-Sandbox-Token: <capability-token>"
 ```
 
 **Query parameters**
@@ -92,7 +92,7 @@ Creates a directory. By default this also creates all intermediate parent direct
 
 ```bash
 curl -X POST https://50000-<sandbox-id>.sandboxes.example.com/files/directories \
-  -H "Authorization: Bearer <capability-token>" \
+  -H "X-Sandbox-Token: <capability-token>" \
   -H "Content-Type: application/json" \
   -d '{"path": "/workspace/data/output", "mode": "0755"}'
 ```
@@ -124,7 +124,7 @@ Downloads the raw bytes of a file. The response body is the file content with `C
 
 ```bash
 curl "https://50000-<sandbox-id>.sandboxes.example.com/files/content?path=/workspace/output.json" \
-  -H "Authorization: Bearer <capability-token>" \
+  -H "X-Sandbox-Token: <capability-token>" \
   -o output.json
 ```
 
@@ -155,7 +155,7 @@ Uploads a file to the given path. The file is written atomically — the old con
 
 ```bash
 curl -X PUT "https://50000-<sandbox-id>.sandboxes.example.com/files/content?path=/workspace/app.js&mode=0644" \
-  -H "Authorization: Bearer <capability-token>" \
+  -H "X-Sandbox-Token: <capability-token>" \
   -H "Content-Type: application/octet-stream" \
   --data-binary @app.js
 ```
@@ -187,7 +187,7 @@ Moves or renames a file or directory. The source must exist. By default the dest
 
 ```bash
 curl -X POST https://50000-<sandbox-id>.sandboxes.example.com/files/move \
-  -H "Authorization: Bearer <capability-token>" \
+  -H "X-Sandbox-Token: <capability-token>" \
   -H "Content-Type: application/json" \
   -d '{
     "source": "/workspace/draft.txt",
@@ -224,11 +224,11 @@ Removes a file or directory. Pass `recursive=true` to remove a non-empty directo
 ```bash
 # Remove a single file
 curl -X DELETE "https://50000-<sandbox-id>.sandboxes.example.com/files?path=/workspace/temp.txt" \
-  -H "Authorization: Bearer <capability-token>"
+  -H "X-Sandbox-Token: <capability-token>"
 
 # Remove a directory tree
 curl -X DELETE "https://50000-<sandbox-id>.sandboxes.example.com/files?path=/workspace/cache&recursive=true" \
-  -H "Authorization: Bearer <capability-token>"
+  -H "X-Sandbox-Token: <capability-token>"
 ```
 
 **Query parameters**

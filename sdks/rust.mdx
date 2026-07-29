@@ -1,5 +1,5 @@
 ---
-title: "FissionPlane Rust SDK Reference"
+title: "FissionPlane Rust SDK: Async Sandboxes and Templates"
 sidebarTitle: "Rust"
 description: "Add the fissionplane crate to your Rust project. Async Tokio-based client for sandboxes, commands, file I/O, port exposure, and template builds."
 ---
@@ -162,11 +162,13 @@ while let Some(event) = attachment.next().await {
 
 Access filesystem operations through `sandbox.files()?`. The handle provides:
 
-- `list()` — read directory entries and file metadata
+- `list()` — read directory entries below a path
+- `stat()` — read metadata for a single path
 - `make_dir()` — create a directory (and parents)
-- `write()` — upload bytes to a path
-- `read()` — download bytes from a path
-- `delete()` — remove a file or directory
+- `write()` / `upload()` — upload bytes to a path
+- `read()` / `download()` — download bytes from a path
+- `move_path()` — move or rename a path
+- `remove()` — remove a file or directory
 - `watch()` — open a recursive WebSocket watch for filesystem change events
 
 All calls target the sandbox data plane directly.

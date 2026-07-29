@@ -10,25 +10,25 @@ FissionPlane separates authentication into two layers that match its two APIs. T
 
 ### API key
 
-Pass your API key in the `Authorization` header on every control plane request:
+Pass your API key in the `X-API-Key` header on every control plane request:
 
 ```bash
 curl https://api.example.com/v1/sandboxes \
-  -H "Authorization: Bearer <your-api-key>"
+  -H "X-API-Key: <your-api-key>"
 ```
 
 The API key is an opaque string tied to your organisation. Store it in an environment variable or a secrets manager and never include it in client-side code.
 
 ### OIDC bearer token
 
-If your organisation integrates with an identity provider, you can use an OIDC bearer token in place of an API key:
+If your organisation integrates with an identity provider, you can use an OIDC bearer token in the `Authorization: Bearer` header instead of an API key:
 
 ```bash
 curl https://api.example.com/v1/sandboxes \
   -H "Authorization: Bearer <oidc-token>"
 ```
 
-When you supply both an API key and an OIDC token in the same request, the API key takes precedence. The TypeScript SDK mirrors this behaviour: set `apiKey` for an API key and `accessToken` for an OIDC token; `apiKey` wins when both are set.
+When you supply both an API key (`X-API-Key`) and an OIDC token (`Authorization: Bearer`) in the same request, the API key takes precedence.
 
 <Tip>
   Use OIDC tokens when integrating FissionPlane with an identity provider such as
@@ -40,11 +40,11 @@ When you supply both an API key and an OIDC token in the same request, the API k
 
 The sandbox data plane does not accept your organisation API key. It only accepts **capability tokens** — short-lived, cryptographically signed credentials that the control plane mints and that carry the sandbox ID, the current epoch, a port scope, and an expiry time.
 
-Pass a capability token in the `Authorization` header exactly as you would an API key:
+Pass a capability token in the `X-Sandbox-Token` header on every data plane request:
 
 ```bash
-curl https://50000-<sandbox-id>.sandboxes.example.com/commands \
-  -H "Authorization: Bearer <capability-token>" \
+curl -X POST https://50000-<sandbox-id>.sandboxes.example.com/commands \
+  -H "X-Sandbox-Token: <capability-token>" \
   -H "Content-Type: application/json" \
   -d '{"command":"echo","args":["hello"]}'
 ```
@@ -53,11 +53,11 @@ The gateway verifies the token and the owning node verifies it again. The token 
 
 ### Minting a capability token
 
-Call `POST /v1/sandboxes/{id}/token` on the control plane to mint a fresh token:
+Call `POST /v1/sandboxes/{sandboxId}/token` on the control plane to mint a fresh token:
 
 ```bash
 curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/token \
-  -H "Authorization: Bearer <your-api-key>" \
+  -H "X-API-Key: <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{"ttl_seconds": 300}'
 ```
@@ -81,7 +81,7 @@ You can restrict a capability token to specific ports by supplying the `ports` a
 
 ```bash
 curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/token \
-  -H "Authorization: Bearer <your-api-key>" \
+  -H "X-API-Key: <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{"ttl_seconds": 3600, "ports": [3000]}'
 ```
@@ -97,9 +97,9 @@ An attenuated token can only narrow the scope your own credential permits — yo
 </Note>
 
 <Warning>
-  Never send your organisation API key to the data plane. The data plane rejects
-  it and your key would be exposed in logs and transit. Always use a capability
-  token for data plane requests.
+  Never send your organisation API key to the data plane or to browser code.
+  Use capability tokens for all data plane access and for any credential you
+  hand to a client outside your server.
 </Warning>
 
 ## Authentication errors

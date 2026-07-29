@@ -1,5 +1,5 @@
 ---
-title: "Deploy FissionPlane on Kubernetes with Helm"
+title: "Install FissionPlane on Kubernetes with a Helm Chart"
 sidebarTitle: "Installation"
 description: "Install FissionPlane on any Kubernetes cluster using a single Helm chart. Covers prerequisites, node pool setup, and first-run validation."
 ---
@@ -66,6 +66,10 @@ kubectl taint nodes -l fissionplane.dev/role=sandbox \
     ```bash
     helm repo add fissionplane https://charts.fissionplane.dev
     ```
+
+    <Note>
+      The chart repository URL above is a placeholder. The Helm chart has not yet been published to a public repository. Check the [FissionPlane repository](https://github.com/ManuelAngel99/fissionplane) for the latest deployment instructions and the actual chart location when it is available.
+    </Note>
 
   </Step>
 

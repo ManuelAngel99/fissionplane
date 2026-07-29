@@ -1,7 +1,7 @@
 ---
-title: "Templates: Immutable Pre-Booted Sandbox Artifacts"
+title: "Templates: Immutable Pre-Booted Sandbox Environments"
 sidebarTitle: "Templates"
-description: "Templates are immutable pre-booted artifacts built from OCI images. Every sandbox starts from a template. Build them once, create sandboxes in milliseconds."
+description: "Templates are immutable pre-booted artifacts from OCI images. Every sandbox starts from a template. Build them once and create sandboxes in milliseconds."
 ---
 
 A template is an immutable artifact that captures a fully-booted Linux environment. You provide an OCI image and an optional set of build steps — FissionPlane boots it once, applies your steps, takes a snapshot, and stores the result. Every sandbox you create afterwards starts from that snapshot rather than booting from scratch, which is what makes sandbox creation take milliseconds instead of seconds. Because templates are immutable, you can rely on every sandbox from a given template being identical at the moment it starts.

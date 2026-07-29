@@ -12,7 +12,7 @@ All commands endpoints use the sandbox-specific data plane base URL:
 https://50000-<sandbox-id>.<your-domain>
 ```
 
-Authenticate every request with a capability token in the `Authorization: Bearer` header. See [Tokens](/api/tokens) to learn how to mint one.
+Authenticate every request with a capability token in the `X-Sandbox-Token` header. See [Tokens](/api/tokens) to learn how to mint one.
 
 <Note>
   The data plane is available whenever the sandbox is running, even if the control
@@ -30,7 +30,7 @@ Use this endpoint for short, discrete commands. For commands with unbounded outp
 
 ```bash
 curl -X POST https://50000-<sandbox-id>.sandboxes.example.com/commands \
-  -H "Authorization: Bearer <capability-token>" \
+  -H "X-Sandbox-Token: <capability-token>" \
   -H "Content-Type: application/json" \
   -d '{
     "command": "node",
@@ -112,7 +112,7 @@ Starts a supervised background process and returns as soon as it has been spawne
 
 ```bash
 curl -X POST https://50000-<sandbox-id>.sandboxes.example.com/processes \
-  -H "Authorization: Bearer <capability-token>" \
+  -H "X-Sandbox-Token: <capability-token>" \
   -H "Content-Type: application/json" \
   -d '{
     "command": "bash",
@@ -185,7 +185,7 @@ Lists the processes the agent supervises inside the sandbox. This includes runni
 
 ```bash
 curl https://50000-<sandbox-id>.sandboxes.example.com/processes \
-  -H "Authorization: Bearer <capability-token>"
+  -H "X-Sandbox-Token: <capability-token>"
 ```
 
 **Response** — `200 OK`
@@ -206,7 +206,7 @@ Gets the current state of a single supervised process.
 
 ```bash
 curl https://50000-<sandbox-id>.sandboxes.example.com/processes/42 \
-  -H "Authorization: Bearer <capability-token>"
+  -H "X-Sandbox-Token: <capability-token>"
 ```
 
 **Path parameters**
@@ -247,11 +247,11 @@ Sends a Unix signal to a supervised process. The default is `SIGTERM`. Use `SIGK
 ```bash
 # Graceful termination
 curl -X DELETE "https://50000-<sandbox-id>.sandboxes.example.com/processes/42?signal=SIGTERM" \
-  -H "Authorization: Bearer <capability-token>"
+  -H "X-Sandbox-Token: <capability-token>"
 
 # Force kill
 curl -X DELETE "https://50000-<sandbox-id>.sandboxes.example.com/processes/42?signal=SIGKILL" \
-  -H "Authorization: Bearer <capability-token>"
+  -H "X-Sandbox-Token: <capability-token>"
 ```
 
 **Path parameters**
@@ -279,7 +279,7 @@ Reads buffered output that the agent has retained for this process. The agent ke
 
 ```bash
 curl "https://50000-<sandbox-id>.sandboxes.example.com/processes/42/logs?after=0" \
-  -H "Authorization: Bearer <capability-token>"
+  -H "X-Sandbox-Token: <capability-token>"
 ```
 
 **Path parameters**

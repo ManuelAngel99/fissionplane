@@ -6,12 +6,12 @@ description: "Control plane endpoints for template lifecycle. Start async builds
 
 Templates are the starting point for every sandbox. You build a template from an OCI image reference — FissionPlane resolves the tag to an immutable digest, runs your build recipe inside a VM, captures a warm snapshot, and stores the resulting artifact. You then create sandboxes from the alias or artifact ID, and every sandbox starts from the exact bytes captured at build time.
 
-All template endpoints are on the control plane: `https://<your-domain>/v1`. Authenticate with your organisation API key or OIDC token in the `Authorization: Bearer` header.
+All template endpoints are on the control plane: `https://<your-control-plane-url>/v1`. Authenticate with your organisation API key in the `X-API-Key` header, or an OIDC bearer token in `Authorization: Bearer`.
 
 <Note>
   Builds are asynchronous. After you start a build with `POST /v1/templates/builds`,
-  poll `GET /v1/templates/builds/{id}` for status and tail output with
-  `GET /v1/templates/builds/{id}/logs` until the build reaches a terminal state.
+  poll `GET /v1/templates/builds/{buildId}` for status and tail output with
+  `GET /v1/templates/builds/{buildId}/logs` until the build reaches a terminal state.
 </Note>
 
 ---
@@ -22,7 +22,7 @@ Starts an asynchronous template build from an OCI image. The image tag is resolv
 
 ```bash
 curl -X POST https://api.example.com/v1/templates/builds \
-  -H "Authorization: Bearer <your-api-key>" \
+  -H "X-API-Key: <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{
     "image": "node:22",
@@ -119,18 +119,18 @@ curl -X POST https://api.example.com/v1/templates/builds \
 
 ---
 
-## GET /v1/templates/builds/{id}
+## GET /v1/templates/builds/{buildId}
 
 Gets the current status of a template build. Poll this endpoint after starting a build to detect when it reaches a terminal state.
 
 ```bash
 curl https://api.example.com/v1/templates/builds/<build-id> \
-  -H "Authorization: Bearer <your-api-key>"
+  -H "X-API-Key: <your-api-key>"
 ```
 
 **Path parameters**
 
-<ParamField path="id" type="string" required>
+<ParamField path="buildId" type="string" required>
   The 24-character build NanoID returned by `POST /v1/templates/builds`.
 </ParamField>
 
@@ -160,18 +160,18 @@ curl https://api.example.com/v1/templates/builds/<build-id> \
 
 ---
 
-## GET /v1/templates/builds/{id}/logs
+## GET /v1/templates/builds/{buildId}/logs
 
-Returns log entries from a template build starting at `offset`. Poll this endpoint alongside `GET /v1/templates/builds/{id}` to tail build output. A call at the current end of the log returns an empty page and is not an error.
+Returns log entries from a template build starting at `offset`. Poll this endpoint alongside `GET /v1/templates/builds/{buildId}` to tail build output. A call at the current end of the log returns an empty page and is not an error.
 
 ```bash
 curl "https://api.example.com/v1/templates/builds/<build-id>/logs?offset=0" \
-  -H "Authorization: Bearer <your-api-key>"
+  -H "X-API-Key: <your-api-key>"
 ```
 
 **Path parameters**
 
-<ParamField path="id" type="string" required>
+<ParamField path="buildId" type="string" required>
   The 24-character build NanoID.
 </ParamField>
 
@@ -208,7 +208,7 @@ Lists templates visible to your organisation, most recently created first.
 
 ```bash
 curl "https://api.example.com/v1/templates?limit=20" \
-  -H "Authorization: Bearer <your-api-key>"
+  -H "X-API-Key: <your-api-key>"
 ```
 
 **Query parameters**
@@ -239,7 +239,7 @@ Gets a template by alias or template ID. Because aliases are mutable, reading a 
 
 ```bash
 curl https://api.example.com/v1/templates/node-tools \
-  -H "Authorization: Bearer <your-api-key>"
+  -H "X-API-Key: <your-api-key>"
 ```
 
 **Path parameters**
@@ -289,7 +289,7 @@ Deletes the template record and its alias. The underlying artifact bytes are rel
 
 ```bash
 curl -X DELETE https://api.example.com/v1/templates/node-tools \
-  -H "Authorization: Bearer <your-api-key>"
+  -H "X-API-Key: <your-api-key>"
 ```
 
 **Path parameters**

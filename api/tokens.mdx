@@ -6,19 +6,19 @@ description: "Mint short-lived capability tokens scoped to a sandbox epoch. Use 
 
 Capability tokens are the credential type for the sandbox data plane. They are short-lived, cryptographically signed, and bound to a specific sandbox epoch. Unlike your organisation API key, a capability token carries explicit scope information — the sandbox ID, the epoch, a port restriction, and an expiry — so the gateway and the owning node can verify and enforce it without contacting the control plane.
 
-You mint capability tokens from the control plane using your organisation API key. The token you get back is what you (or a browser client) send to the data plane.
+You mint capability tokens from the control plane using your organisation API key. The token you get back is what you (or a browser client) send to the data plane using the `X-Sandbox-Token` header.
 
 ## Why capability tokens exist
 
-Every sandbox data plane endpoint requires a token rather than your API key for two reasons. First, your organisation API key is a long-lived secret that should never travel to a sandbox agent. Second, when you want to grant a browser or a third-party service access to exactly one port on one sandbox for a limited time, you mint an attenuated token scoped to that port — no broader access is possible, even if the token is intercepted.
+Every sandbox data plane endpoint requires a capability token rather than your API key for two reasons. First, your organisation API key is a long-lived secret that should never travel to a sandbox agent. Second, when you want to grant a browser or a third-party service access to exactly one port on one sandbox for a limited time, you mint an attenuated token scoped to that port — no broader access is possible, even if the token is intercepted.
 
-## POST /v1/sandboxes/{id}/token
+## POST /v1/sandboxes/{sandboxId}/token
 
 Mints a fresh capability token for the sandbox's current epoch. The request body is optional — omit it to get a full-scope token with the installation's default TTL.
 
 ```bash
 curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/token \
-  -H "Authorization: Bearer <your-api-key>" \
+  -H "X-API-Key: <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{
     "ttl_seconds": 300,
@@ -28,7 +28,7 @@ curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/token \
 
 **Path parameters**
 
-<ParamField path="id" type="string" required>
+<ParamField path="sandboxId" type="string" required>
   The 24-character sandbox NanoID.
 </ParamField>
 
@@ -59,8 +59,8 @@ curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/token \
 ```
 
 <ResponseField name="token" type="string" required>
-  The bearer credential string. Pass this in the `Authorization: Bearer` header
-  on data plane requests. Never log it.
+  The capability token string. Pass this in the `X-Sandbox-Token` header on
+  data plane requests. Never log it.
 </ResponseField>
 
 <ResponseField name="expires_at" type="string" required>
@@ -103,7 +103,7 @@ To give a browser or untrusted client access to a specific port on your sandbox,
 
 ```bash
 curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/token \
-  -H "Authorization: Bearer <your-api-key>" \
+  -H "X-API-Key: <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{
     "ttl_seconds": 3600,
@@ -121,11 +121,11 @@ The resulting token can only reach port `3000` on that sandbox and expires in on
 
 ## Using a token on the data plane
 
-Once you have minted a token, include it in the `Authorization: Bearer` header on every data plane request:
+Once you have minted a token, include it in the `X-Sandbox-Token` header on every data plane request:
 
 ```bash
 curl -X POST https://50000-<sandbox-id>.sandboxes.example.com/commands \
-  -H "Authorization: Bearer <capability-token>" \
+  -H "X-Sandbox-Token: <capability-token>" \
   -H "Content-Type: application/json" \
   -d '{"command": "node", "args": ["--version"]}'
 ```

@@ -1,5 +1,5 @@
 ---
-title: "FissionPlane Python SDK Reference"
+title: "FissionPlane Python SDK: Sandboxes, Commands, and Templates"
 sidebarTitle: "Python"
 description: "Install and configure the fissionplane Python package. Use sync or async clients to manage sandboxes, run commands, stream output, and build templates."
 ---
@@ -265,6 +265,14 @@ except FissionPlaneError as error:
 ```
 
 The package also exports typed errors for authentication failures, authorization denials, missing resources, lifecycle conflicts, expired snapshots, command timeouts, and failed template builds.
+
+## Control Plane and Data Plane
+
+The control plane manages sandboxes, ports, tokens, and templates. The sandbox data plane runs commands, streams process I/O, and accesses files.
+
+The SDK sends your API key or OIDC token to the control plane. It sends a short-lived capability token to the sandbox data plane, stored on the sandbox handle.
+
+The data-plane agent uses port `50000` by default. Pass `agent_port` to the client constructor only when your installation uses a different port.
 
 <Note>
   `fissionplane` is version `0.0.1`. The public API is unstable and may change without notice until the project publishes a stable release.

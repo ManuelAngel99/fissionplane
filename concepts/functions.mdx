@@ -1,21 +1,25 @@
 ---
-title: "Functions: Serverless Code on Your Own Hardware"
+title: "Functions: Deploy Serverless Code on Your Own Hardware"
 sidebarTitle: "Functions"
-description: "Deploy versioned functions from OCI images. FissionPlane starts each invocation from a warm snapshot and scales to zero between calls."
+description: "Deploy versioned functions from OCI images. FissionPlane invokes each from a warm snapshot and scales to zero. Functions are planned for a future release."
 ---
 
-Functions let you deploy code once and invoke it on demand, without managing long-running processes or paying for idle compute. You package your handler in an OCI image, deploy it to FissionPlane, and invoke it over HTTPS or on a schedule. Between invocations, FissionPlane releases the compute slot entirely — scaling to zero. When a request arrives, a microVM starts from a warm snapshot in milliseconds and runs your handler to completion.
+Functions are designed to let you deploy code once and invoke it on demand, without managing long-running processes or reserving compute for idle time. You package your handler in an OCI image, deploy it to FissionPlane, and invoke it over HTTPS or on a schedule. Between invocations FissionPlane releases the compute slot entirely — scaling to zero. When a request arrives, a microVM starts from a warm snapshot in milliseconds and runs your handler to completion.
+
+<Warning>
+Functions are on the FissionPlane roadmap and are not yet available in the current release (v0.0.1). The design described on this page reflects planned behavior. If you need one-shot isolated execution today, [sandboxes](/concepts/sandboxes) are the right primitive — create a sandbox, run your command, collect the result, and delete it.
+</Warning>
 
 Functions and [sandboxes](/concepts/sandboxes) run on the same substrate — the same Firecracker microVMs, the same immutable templates, the same capability token model — but serve different use cases. A sandbox is stateful and interactive: you create it, run a series of commands, and delete it when you're done. A function is deployed once and invoked many times: each invocation is ephemeral and isolated from every other.
 
-## How functions work
+## How functions will work
 
 <Steps>
   <Step title="Build a template from your OCI image">
     FissionPlane boots your image, runs any setup steps you specify, and snapshots the result as a template artifact. This is the warm snapshot every invocation will start from.
   </Step>
   <Step title="Deploy a function pointing at that template">
-    A function deployment binds a handler entry point to a template version. FissionPlane creates a pool of warm snapshots ready to be restored on demand.
+    A function deployment binds a handler entry point to a template version. FissionPlane maintains a pool of warm snapshots ready to be restored on demand.
   </Step>
   <Step title="Invoke the function">
     Each invocation restores a microVM from the warm snapshot, runs your handler, and returns the result. The microVM is released when the handler exits. The next invocation gets a fresh environment.
@@ -24,9 +28,11 @@ Functions and [sandboxes](/concepts/sandboxes) run on the same substrate — the
 
 Because each invocation starts from the same snapshot, your handler always sees the same initial filesystem and process state. Side effects from one invocation never bleed into the next.
 
-## Deploying a function
+## Planned API shape
 
-Deploy a function by pointing FissionPlane at an OCI image that contains your handler. Specify the handler entry point and, optionally, a name and runtime configuration.
+The examples below illustrate the intended API. These methods are not available in v0.0.1.
+
+### Deploying a function
 
 ```ts TypeScript
 const fn = await client.functions.deploy({
@@ -46,9 +52,7 @@ fn = client.functions.deploy(
 print("Deployed function:", fn.function_id)
 ```
 
-## Invoking a function
-
-Call a deployed function over HTTPS. FissionPlane gives each function a stable HTTPS URL. You can also invoke programmatically through the SDK.
+### Invoking a function
 
 ```ts TypeScript
 const response = await client.functions.invoke('data-processor', {
@@ -65,9 +69,7 @@ response = client.functions.invoke(
 print(response.result)
 ```
 
-## Scheduling functions
-
-Invoke a function on a cron schedule for periodic jobs — nightly reports, cache warming, data pipeline triggers, and similar workloads.
+### Scheduling functions
 
 ```ts TypeScript
 await client.functions.schedule('data-processor', {
@@ -82,9 +84,9 @@ client.functions.schedule(
 )
 ```
 
-## Versioning and rollback
+### Versioning and rollback
 
-Every deployment creates a new version. Versions are immutable: deploying new code does not change existing versions. You can roll back to any previous version with a single call, making it safe to deploy frequently and revert quickly.
+Every deployment creates a new version. Versions are immutable: deploying new code does not change existing versions. You can roll back to any previous version with a single call.
 
 ```ts TypeScript
 // List versions of a function
@@ -102,7 +104,7 @@ versions = client.functions.list_versions("data-processor")
 client.functions.set_active("data-processor", version=versions[1].version_id)
 ```
 
-## Use cases
+## Intended use cases
 
 <CardGroup cols={2}>
   <Card title="Serverless APIs" icon="globe">
@@ -119,6 +121,6 @@ client.functions.set_active("data-processor", version=versions[1].version_id)
   </Card>
 </CardGroup>
 
-<Note>
-Functions are on the FissionPlane roadmap. The architecture and API shape described here reflect planned behavior. If you need an interactive, stateful environment today, [sandboxes](/concepts/sandboxes) are the right primitive — you can run a command in a sandbox, collect the result, and delete it, achieving a similar one-shot execution pattern with the current stable API.
-</Note>
+## What to use today
+
+Until functions ship, [sandboxes](/concepts/sandboxes) cover the one-shot execution pattern well. Create a sandbox, run your command, collect the result, and delete it. The latency is slightly higher than a pre-warmed function invocation, but the isolation guarantees are identical — the same Firecracker microVM, the same hardware boundary.

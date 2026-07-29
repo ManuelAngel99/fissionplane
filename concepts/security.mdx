@@ -1,7 +1,7 @@
 ---
-title: "Security Model and Isolation in FissionPlane"
+title: "FissionPlane Security: Isolation, Tokens, and Trust"
 sidebarTitle: "Security"
-description: "Each sandbox runs in a Firecracker microVM with its own kernel and network namespace. Capability tokens gate access. No credentials cross the guest boundary."
+description: "Hardware isolation per sandbox, epoch-scoped capability tokens, and a strict no-credentials-in-guest guarantee keep untrusted workloads contained."
 ---
 
 FissionPlane is built to run code its operators have no reason to trust. Every design decision around isolation, credentials, and network access follows from that assumption. This page explains what guarantees you get as a user of the platform — what is isolated from what, how access is controlled, and what the platform explicitly does and does not promise.

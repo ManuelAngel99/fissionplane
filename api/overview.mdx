@@ -8,10 +8,10 @@ FissionPlane exposes two separate HTTP APIs that together cover the full platfor
 
 ## Base URLs
 
-**Control plane** — all lifecycle and management operations use a single base URL rooted at your installation domain:
+**Control plane** — all lifecycle and management operations use a single base URL rooted at your installation's control plane domain:
 
 ```
-https://<your-domain>/v1
+https://<your-control-plane-url>/v1
 ```
 
 Every control plane endpoint is versioned under the `/v1` prefix. Examples include `POST /v1/sandboxes` to create a sandbox and `GET /v1/templates` to list templates.
@@ -26,10 +26,10 @@ The data plane is available whenever the sandbox is running, even when the contr
 
 ## Authentication
 
-The two APIs use different credential types:
+The two APIs use different credential types and different headers:
 
-- **Control plane**: pass your organisation API key or an OIDC bearer token in the `Authorization: Bearer` header on every request.
-- **Data plane**: pass a short-lived capability token, also in `Authorization: Bearer`. Capability tokens are scoped to one sandbox epoch and are minted by the control plane via `POST /v1/sandboxes/{id}/token`. The SDK handles minting and refreshing these tokens automatically.
+- **Control plane**: pass your organisation API key in the `X-API-Key` header, or an OIDC bearer token in the `Authorization: Bearer` header.
+- **Data plane**: pass a short-lived capability token in the `X-Sandbox-Token` header. Capability tokens are scoped to one sandbox epoch and are minted by the control plane via `POST /v1/sandboxes/{sandboxId}/token`. The SDK handles minting and refreshing these tokens automatically.
 
 See the [Authentication](/api/authentication) page for the full details.
 
@@ -80,8 +80,8 @@ Every non-2xx response body follows the same JSON structure:
 </ResponseField>
 
 <ResponseField name="request_id" type="string">
-  The request identifier that links this response to a specific node operation.
-  Include it in any support request.
+  The request identifier, for correlating with support and audit. Include it
+  in any support request.
 </ResponseField>
 
 ## OpenAPI specifications

@@ -4,9 +4,9 @@ sidebarTitle: "Sandboxes"
 description: "Control plane endpoints for managing sandbox lifecycle. Create from a template, pause to object storage, resume, extend deadlines, and filter by metadata."
 ---
 
-The sandbox endpoints on the control plane manage the full lifecycle of your Firecracker microVM sandboxes. Every sandbox starts from a template artifact, runs until its deadline expires or you explicitly act on it, and can be paused to object storage and resumed onto a fresh node. All endpoints sit under the control plane base URL: `https://<your-domain>/v1`.
+The sandbox endpoints on the control plane manage the full lifecycle of your Firecracker microVM sandboxes. Every sandbox starts from a template artifact, runs until its deadline expires or you explicitly act on it, and can be paused to object storage and resumed onto a fresh node. All endpoints sit under the control plane base URL: `https://<your-control-plane-url>/v1`.
 
-Authenticate every request with your organisation API key or OIDC token in the `Authorization: Bearer` header. See [Authentication](/api/authentication) for details.
+Authenticate every request with your organisation API key in the `X-API-Key` header, or an OIDC bearer token in `Authorization: Bearer`. See [Authentication](/api/authentication) for details.
 
 ---
 
@@ -18,7 +18,7 @@ Supply an `Idempotency-Key` header to make retries safe: a retry with the same k
 
 ```bash
 curl -X POST https://api.example.com/v1/sandboxes \
-  -H "Authorization: Bearer <your-api-key>" \
+  -H "X-API-Key: <your-api-key>" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: my-unique-key-001" \
   -d '{
@@ -140,7 +140,7 @@ Lists your organisation's sandboxes, most recently created first. All filters ar
 
 ```bash
 curl "https://api.example.com/v1/sandboxes?state=running&metadata=team%3Dplatform&limit=20" \
-  -H "Authorization: Bearer <your-api-key>"
+  -H "X-API-Key: <your-api-key>"
 ```
 
 **Query parameters**
@@ -179,18 +179,18 @@ curl "https://api.example.com/v1/sandboxes?state=running&metadata=team%3Dplatfor
 
 ---
 
-## GET /v1/sandboxes/{id}
+## GET /v1/sandboxes/{sandboxId}
 
 Gets a single sandbox by its ID.
 
 ```bash
 curl https://api.example.com/v1/sandboxes/<sandbox-id> \
-  -H "Authorization: Bearer <your-api-key>"
+  -H "X-API-Key: <your-api-key>"
 ```
 
 **Path parameters**
 
-<ParamField path="id" type="string" required>
+<ParamField path="sandboxId" type="string" required>
   The 24-character sandbox NanoID.
 </ParamField>
 
@@ -202,18 +202,18 @@ Returns the sandbox object described in the create response above.
 
 ---
 
-## DELETE /v1/sandboxes/{id}
+## DELETE /v1/sandboxes/{sandboxId}
 
 Terminates the sandbox and releases its node capacity. If the sandbox is paused, its snapshot is also released. The sandbox record remains readable as `terminated` — it is not purged immediately.
 
 ```bash
 curl -X DELETE https://api.example.com/v1/sandboxes/<sandbox-id> \
-  -H "Authorization: Bearer <your-api-key>"
+  -H "X-API-Key: <your-api-key>"
 ```
 
 **Path parameters**
 
-<ParamField path="id" type="string" required>
+<ParamField path="sandboxId" type="string" required>
   The 24-character sandbox NanoID.
 </ParamField>
 
@@ -223,7 +223,7 @@ curl -X DELETE https://api.example.com/v1/sandboxes/<sandbox-id> \
 
 ---
 
-## POST /v1/sandboxes/{id}/pause
+## POST /v1/sandboxes/{sandboxId}/pause
 
 Pauses a running sandbox by taking a memory snapshot and releasing node capacity. The call returns once the node reports the VM snapshotted; the snapshot uploads to object storage in the background.
 
@@ -231,12 +231,12 @@ The response includes a `restorable_until` field that tells you how long the sna
 
 ```bash
 curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/pause \
-  -H "Authorization: Bearer <your-api-key>"
+  -H "X-API-Key: <your-api-key>"
 ```
 
 **Path parameters**
 
-<ParamField path="id" type="string" required>
+<ParamField path="sandboxId" type="string" required>
   The 24-character sandbox NanoID.
 </ParamField>
 
@@ -248,20 +248,20 @@ Returns the updated sandbox object with `state: "paused"` and a `restorable_unti
 
 ---
 
-## POST /v1/sandboxes/{id}/resume
+## POST /v1/sandboxes/{sandboxId}/resume
 
 Restores a paused sandbox onto a node. The resumed instance receives a **new epoch**, so all capability tokens minted against the previous instance are invalidated. This endpoint returns a fresh token alongside the sandbox.
 
 ```bash
 curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/resume \
-  -H "Authorization: Bearer <your-api-key>" \
+  -H "X-API-Key: <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{"deadline_seconds": 3600}'
 ```
 
 **Path parameters**
 
-<ParamField path="id" type="string" required>
+<ParamField path="sandboxId" type="string" required>
   The 24-character sandbox NanoID.
 </ParamField>
 
@@ -280,20 +280,20 @@ Returns a `SandboxWithToken` object with the updated sandbox (`state: "running"`
 
 ---
 
-## POST /v1/sandboxes/{id}/deadline
+## POST /v1/sandboxes/{sandboxId}/deadline
 
 Extends the sandbox deadline to now plus `deadline_seconds`, bounded by the installation's maximum configured lease. Use this to keep a long-running sandbox alive without recreating it.
 
 ```bash
 curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/deadline \
-  -H "Authorization: Bearer <your-api-key>" \
+  -H "X-API-Key: <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{"deadline_seconds": 7200}'
 ```
 
 **Path parameters**
 
-<ParamField path="id" type="string" required>
+<ParamField path="sandboxId" type="string" required>
   The 24-character sandbox NanoID.
 </ParamField>
 
@@ -308,3 +308,110 @@ curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/deadline \
 Returns the updated sandbox object with the new `deadline` timestamp.
 
 **Error codes**: `400` malformed request · `401` unauthenticated · `404` not found · `409` lifecycle conflict
+
+---
+
+## GET /v1/sandboxes/{sandboxId}/ports
+
+Lists the port exposure records for a sandbox. A port with no record is private by default — it is reachable with a valid capability token but does not admit anonymous traffic. Records exist to make exposure explicit, durable, and auditable.
+
+```bash
+curl https://api.example.com/v1/sandboxes/<sandbox-id>/ports \
+  -H "X-API-Key: <your-api-key>"
+```
+
+**Path parameters**
+
+<ParamField path="sandboxId" type="string" required>
+  The 24-character sandbox NanoID.
+</ParamField>
+
+**Response** — `200 OK`
+
+<ResponseField name="items" type="PortExposure[]" required>
+  The sandbox's port exposure records.
+
+  <Expandable title="PortExposure fields">
+    <ResponseField name="port" type="integer" required>The port number.</ResponseField>
+    <ResponseField name="visibility" type="string" required>
+      Either `private` (capability token required) or `public` (anonymous traffic admitted).
+    </ResponseField>
+    <ResponseField name="url" type="string" required>
+      The port's public URL: `https://<port>-<sandbox_id>.<domain>`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+**Error codes**: `401` unauthenticated · `404` not found
+
+---
+
+## PUT /v1/sandboxes/{sandboxId}/ports/{port}
+
+Creates or updates the exposure record for a specific port. Setting `visibility` to `public` admits anonymous traffic to that port — an explicit, durable, audited opt-in that defaults off. Setting it to `private` records the port without widening access. This operation is idempotent: repeating a `PUT` with the same value re-asserts the record.
+
+The reserved agent port (`50000`) cannot be given an exposure record.
+
+```bash
+curl -X PUT https://api.example.com/v1/sandboxes/<sandbox-id>/ports/3000 \
+  -H "X-API-Key: <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"visibility": "public"}'
+```
+
+**Path parameters**
+
+<ParamField path="sandboxId" type="string" required>
+  The 24-character sandbox NanoID.
+</ParamField>
+
+<ParamField path="port" type="integer" required>
+  The port number to expose. Between 1 and 65535. The reserved sandbox agent
+  port cannot be used.
+</ParamField>
+
+**Request body**
+
+<ParamField body="visibility" type="string" required>
+  Either `public` (admit anonymous traffic) or `private` (capability token
+  required, which is also the default for any port without a record).
+</ParamField>
+
+**Response** — `200 OK`
+
+<ResponseField name="port" type="integer" required>The port number.</ResponseField>
+
+<ResponseField name="visibility" type="string" required>
+  The recorded visibility: `public` or `private`.
+</ResponseField>
+
+<ResponseField name="url" type="string" required>
+  The port's URL: `https://<port>-<sandbox_id>.<domain>`.
+</ResponseField>
+
+**Error codes**: `400` malformed request or reserved port · `401` unauthenticated · `404` not found · `409` lifecycle conflict
+
+---
+
+## DELETE /v1/sandboxes/{sandboxId}/ports/{port}
+
+Removes the exposure record for a port, returning it to the default private state. Any anonymous public traffic to the port stops immediately.
+
+```bash
+curl -X DELETE https://api.example.com/v1/sandboxes/<sandbox-id>/ports/3000 \
+  -H "X-API-Key: <your-api-key>"
+```
+
+**Path parameters**
+
+<ParamField path="sandboxId" type="string" required>
+  The 24-character sandbox NanoID.
+</ParamField>
+
+<ParamField path="port" type="integer" required>
+  The port number whose record should be removed.
+</ParamField>
+
+**Response** — `204 No Content`
+
+**Error codes**: `401` unauthenticated · `404` not found · `409` lifecycle conflict

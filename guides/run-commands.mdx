@@ -10,7 +10,7 @@ Every FissionPlane sandbox exposes a command API through its data-plane agent. Y
 
 Use `commands.run()` when you want to execute a command and wait for it to finish before continuing. The call blocks until the process exits and returns the full `exit_code`, `stdout`, and `stderr`. An optional `truncated` flag indicates whether the output was cut short by the platform.
 
-Pass `timeoutSeconds` (TypeScript/Rust) or `timeout_seconds` (Python) to set a maximum wall-clock limit for the command.
+Pass `timeoutSeconds` (TypeScript) or `timeout_seconds` (Python/Rust) to set a maximum wall-clock limit for the command.
 
 <Tabs>
   <Tab title="TypeScript">
@@ -94,7 +94,7 @@ Pass `timeoutSeconds` (TypeScript/Rust) or `timeout_seconds` (Python) to set a m
 </Tabs>
 
 <Note>
-  When `timeoutSeconds` expires, FissionPlane terminates the process and throws a command-timeout error. Catch it with `CommandTimeoutError` (TypeScript/Python) or match on `fissionplane::Error` (Rust) to handle timeouts gracefully in your application logic.
+  When the command timeout expires, FissionPlane terminates the process and throws a command-timeout error. Catch it with `CommandTimeoutError` (TypeScript/Python) or match on `fissionplane::Error` (Rust) to handle timeouts gracefully in your application logic.
 </Note>
 
 ## Background processes

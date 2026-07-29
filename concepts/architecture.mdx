@@ -1,5 +1,5 @@
 ---
-title: "How FissionPlane Works: Four-Plane Architecture"
+title: "FissionPlane Architecture: Four Planes, One Cluster"
 sidebarTitle: "Architecture"
 description: "FissionPlane splits into four planes: control, gateway, node runtime, and guest. The data path bypasses the control plane so workloads survive outages."
 ---
@@ -11,7 +11,7 @@ FissionPlane is organized into four planes, each with a distinct role and failur
 ```
                  ╔═ your kubernetes cluster ═══════════════════════════╗
 ╔══════════════╗ ║   ┌───────────────┐          ┌──────────────────┐   ║░
-║  SDK / REST  ║─╫──▶│    gateway    │──mTLS───▶│  node · vm-host  │   ║░
+║  SDK / REST  ║─╫──▶│    gateway    │──mTLS───▶│  node runtime    │   ║░
 ╚══════════════╝ ║   │ TLS · routing │          │  ┌────────────┐  │   ║░
  ░░░░░░░░░░░░░░  ║   └───────────────┘          │  │ ▪ microVM  │  │   ║░
                  ║   ┌───────────────┐          │  │ ▪ microVM  │  │   ║░
@@ -40,9 +40,9 @@ The gateway is stateless and horizontally scalable. It carries no business logic
 
 ### Node runtime — where microVMs live
 
-The node runtime (`vm-host`) runs as a privileged process on each sandbox node. It is the only component that creates, pauses, resumes, and destroys Firecracker microVMs. It manages per-sandbox networking, resource limits, and disk state. It also re-verifies capability tokens when traffic arrives from the gateway, and strips all platform credentials before anything reaches your code inside the sandbox.
+The node runtime runs as a privileged process on each sandbox node. It is the only component that creates, pauses, resumes, and destroys Firecracker microVMs. It manages per-sandbox networking, resource limits, and disk state. It also re-verifies capability tokens when traffic arrives from the gateway, and strips all platform credentials before anything reaches your code inside the sandbox.
 
-Each `vm-host` is the authority on its own node's capacity. Replicas of the control plane never need to lock against each other to make placement decisions — they simply ask the node.
+Each node runtime is the authority on its own node's capacity. Replicas of the control plane never need to lock against each other to make placement decisions — they simply ask the node.
 
 ### Guest plane — treated as hostile
 
@@ -60,7 +60,7 @@ This property has a time bound. Deadlines are enforced by the node runtime from 
 
 FissionPlane deploys into an existing Kubernetes cluster with a single Helm chart. It requires no custom resource definitions, no operators, and no cluster-wide changes. Kubernetes provides scheduling and node management; FissionPlane adds labelled and tainted node pools so sandbox workloads run only on dedicated nodes, keeping your existing cluster workloads entirely separate.
 
-The control plane and gateway run as ordinary Kubernetes Deployments. The node runtime runs as a privileged DaemonSet on the labelled sandbox nodes. Kubernetes sees the control plane and gateway pods; it does not see individual microVMs — those are managed entirely by the node runtime below Kubernetes' visibility.
+The control plane and gateway run as ordinary Kubernetes workloads. The node runtime runs on each dedicated sandbox node with the privileges needed to manage microVMs. Kubernetes sees the control plane and gateway processes; it does not see individual microVMs — those are managed entirely by the node runtime below Kubernetes' visibility.
 
 ## Pause and resume with object storage
 

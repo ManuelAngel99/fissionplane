@@ -1,7 +1,7 @@
 ---
-title: "Expose Sandbox Ports with Public or Private URLs"
+title: "Expose Sandbox Ports as Public or Private HTTPS URLs"
 sidebarTitle: "Ports"
-description: "Expose any guest port through a stable HTTPS URL. Ports are private by default and require a capability token. Make a port public for browser or third-party access."
+description: "Expose any sandbox port as private or public through a stable HTTPS URL. Private ports require a capability token; public ports allow anonymous access."
 ---
 
 FissionPlane routes HTTPS traffic to any port inside a running sandbox through a stable URL. By default every port is private: access requires a short-lived capability token managed by the SDK. You can make a specific port public when you need anonymous browser access or third-party webhooks — but that is an explicit, audited action that is off by default.

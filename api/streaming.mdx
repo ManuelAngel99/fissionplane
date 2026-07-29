@@ -43,7 +43,7 @@ All messages are JSON text frames. The client ignores unknown message types, so 
 
 ---
 
-## GET /processes/{pid}/stream
+## /processes/{pid}/stream
 
 Upgrades to a WebSocket for bidirectional process I/O. After connection, the server replays retained output since the requested sequence and then follows live output. Sending a disconnect does not stop the supervised process — reconnect later to resume.
 
@@ -73,7 +73,7 @@ The server sends these JSON frames:
 
 ```json
 {"type": "stdout", "sequence": 1, "data": "hello\n"}
-{"type": "stderr", "sequence": 2, "data": "warning: something\n"}
+{"type": "stderr", "sequence": 2, "data": "warning\n"}
 {"type": "exit",   "sequence": 3, "exit_code": 0}
 {"type": "gap",    "from_sequence": 1, "to_sequence": 12}
 ```
@@ -111,7 +111,7 @@ Send these JSON frames to interact with the process:
 ```json
 {"type": "input",       "data": "ls -la\n"}
 {"type": "close_stdin"}
-{"type": "resize",      "cols": 220, "rows": 50}
+{"type": "resize",      "cols": 120, "rows": 40}
 {"type": "signal",      "signal": "SIGINT"}
 ```
 
@@ -153,7 +153,7 @@ wscat \
 
 ---
 
-## GET /files/watch
+## /files/watch
 
 Upgrades to a WebSocket that delivers inotify-based filesystem change events for a path inside the sandbox. Pass `recursive=true` to watch an entire directory tree. Connect with `after=<sequence>` to replay recently retained events after a reconnect.
 

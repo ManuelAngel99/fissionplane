@@ -201,13 +201,6 @@ const jsonLdSerialized = jsonLd ? JSON.stringify(jsonLd) : null;
     />
     <link
       rel="preload"
-      href={ibmPlexMono500}
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-    <link
-      rel="preload"
       href={ibmPlexMono700}
       as="font"
       type="font/woff2"
@@ -219,21 +212,21 @@ const jsonLdSerialized = jsonLd ? JSON.stringify(jsonLd) : null;
       @font-face {
         font-family: 'IBM Plex Mono';
         font-style: normal;
-        font-display: block;
+        font-display: optional;
         font-weight: 400;
         src: url('${ibmPlexMono400}') format('woff2');
       }
       @font-face {
         font-family: 'IBM Plex Mono';
         font-style: normal;
-        font-display: block;
+        font-display: optional;
         font-weight: 500;
         src: url('${ibmPlexMono500}') format('woff2');
       }
       @font-face {
         font-family: 'IBM Plex Mono';
         font-style: normal;
-        font-display: block;
+        font-display: optional;
         font-weight: 700;
         src: url('${ibmPlexMono700}') format('woff2');
       }
@@ -244,9 +237,6 @@ const jsonLdSerialized = jsonLd ? JSON.stringify(jsonLd) : null;
         html {
           background: ${THEME_COLOR_DARK};
         }
-      }
-      html:not(.fonts-ready) body {
-        visibility: hidden;
       }
     `}
     />
@@ -328,30 +318,5 @@ const jsonLdSerialized = jsonLd ? JSON.stringify(jsonLd) : null;
   <body>
     <slot />
     <ConsentBanner lang={lang} t={getDictionary(lang)} />
-    <script is:inline>
-      (function () {
-        var root = document.documentElement;
-        function show() {
-          root.classList.add("fonts-ready");
-        }
-        if (!document.fonts) {
-          show();
-          return;
-        }
-        Promise.all([
-          document.fonts.load('400 16px "IBM Plex Mono"'),
-          document.fonts.load('500 16px "IBM Plex Mono"'),
-          document.fonts.load('700 16px "IBM Plex Mono"'),
-        ]).then(show, show);
-        setTimeout(show, 3000);
-      })();
-    </script>
-    <noscript>
-      <style>
-        html:not(.fonts-ready) body {
-          visibility: visible;
-        }
-      </style>
-    </noscript>
   </body>
 </html>

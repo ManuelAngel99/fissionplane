@@ -1,0 +1,7 @@
+# Fingerprinted build artifacts: Astro emits content-hashed filenames under
+# /_astro/, so any change produces a new URL and these can be cached forever.
+# Everything else (HTML, og-image.png, llms.txt) keeps the Workers default of
+# `public, max-age=0, must-revalidate`, since those URLs mutate in place.
+# https://developers.cloudflare.com/workers/static-assets/headers/
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable

@@ -2,7 +2,9 @@
    system used across FissionPlane brand assets. */
 
 :root {
-  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono:
+    'IBM Plex Mono', ui-monospace, SFMono-Regular, 'Cascadia Mono',
+    'Roboto Mono', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   --font-sans: var(--font-mono);
 
   --space-1: 4px;
@@ -121,6 +123,10 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeSpeed;
   font-synthesis: none;
+  /* Match fallback x-heights to IBM Plex Mono's ex-height aspect (~520/1000
+     upm) so cold renders in a system mono stay metrically close. A no-op once
+     the primary font is in use. */
+  font-size-adjust: ex-height 0.52;
 }
 
 img,

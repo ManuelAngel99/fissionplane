@@ -209,7 +209,7 @@ export const es: Dictionary = {
     regionLabel: 'Aviso de cookies',
     heading: 'Aviso de cookies',
     body: 'Usamos analítica para saber cómo se usa este sitio. Sin anuncios y sin seguimiento entre sitios.',
-    learnMore: 'Más información',
+    privacyLink: 'Lee el aviso de privacidad',
     allow: 'Aceptar',
     decline: 'Rechazar',
   },

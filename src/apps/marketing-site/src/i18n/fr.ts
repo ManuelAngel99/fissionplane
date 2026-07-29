@@ -210,7 +210,7 @@ export const fr: Dictionary = {
     regionLabel: 'Avis relatif aux cookies',
     heading: 'Avis relatif aux cookies',
     body: "Nous utilisons des statistiques pour comprendre l'usage de ce site. Pas de publicité, pas de suivi entre sites.",
-    learnMore: 'En savoir plus',
+    privacyLink: "Lire l'avis de confidentialité",
     allow: 'Accepter',
     decline: 'Refuser',
   },

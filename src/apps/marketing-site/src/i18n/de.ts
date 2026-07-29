@@ -211,7 +211,7 @@ export const de: Dictionary = {
     regionLabel: 'Cookie-Hinweis',
     heading: 'Cookie-Hinweis',
     body: 'Wir nutzen Analytics, um zu sehen, wie diese Website genutzt wird. Keine Werbung und kein Tracking über Websites hinweg.',
-    learnMore: 'Mehr erfahren',
+    privacyLink: 'Datenschutzhinweise lesen',
     allow: 'Akzeptieren',
     decline: 'Ablehnen',
   },

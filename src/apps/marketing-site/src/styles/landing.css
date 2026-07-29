@@ -545,7 +545,7 @@ body {
   background: var(--color-background-strong);
   border-radius: 4px;
   color: var(--color-text-inverted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   white-space: nowrap;
   opacity: 0;
@@ -1122,7 +1122,7 @@ body {
 
 @media (max-width: 60rem) {
   [data-component='architecture'] [data-slot='diagram'] {
-    font-size: 11px;
+    font-size: 12px;
     margin-left: 0;
   }
 }

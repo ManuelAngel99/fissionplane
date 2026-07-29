@@ -179,6 +179,14 @@ const jsonLd = shouldEmitJsonLd
             "open source",
           ],
         },
+        {
+          "@type": "SoftwareSourceCode",
+          "@id": `${SITE_ORIGIN}/#sourcecode`,
+          name: SITE_NAME,
+          codeRepository: GITHUB_URL,
+          license: LICENSE_URL,
+          programmingLanguage: ["TypeScript", "Python", "Rust"],
+        },
         ...jsonLdGraph,
       ],
     }

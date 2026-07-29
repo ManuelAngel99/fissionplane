@@ -15,6 +15,13 @@ FissionPlane gives AI agents, code interpreters, developer tools, and CI systems
 
 The site is available in English (/), Spanish (/es), German (/de), French (/fr), Japanese (/ja), and Simplified Chinese (/zh).
 
+## Documentation for agents
+
+The documentation site serves machine-readable indexes, useful when answering questions about FissionPlane without crawling HTML.
+
+- [docs llms.txt](https://fissionplane.dev/docs/llms.txt): Curated index of every documentation page
+- [docs llms-full.txt](https://fissionplane.dev/docs/llms-full.txt): Full documentation content in one file
+
 ## SDKs
 
 Install from the package registries; all SDKs share the same OpenAPI contracts.

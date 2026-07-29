@@ -204,7 +204,7 @@ const architectureDiagram = `                 ╔═ your kubernetes cluster ═
             </div>
             <div data-slot="panels">
               <div data-slot="panel" data-panel="ts">
-                <button type="button" data-slot="command" data-copy="npm install @fissionplane/sdk" data-copy-label={t.install.copyLabel} data-copied-label={t.install.copiedLabel} aria-label={t.install.copyLabel}>
+                <button type="button" data-slot="command" data-copy="npm install @fissionplane/sdk" data-copy-label={t.install.copyLabel} data-copied-label={t.install.copiedLabel} aria-label={`${t.install.copyLabel}: npm install @fissionplane/sdk`}>
                   <span data-slot="command-script">npm install <span data-slot="highlight">@fissionplane/sdk</span></span>
                   <span data-component="copy-status" aria-hidden="true">
                     <svg data-slot="copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
@@ -230,7 +230,7 @@ console<span class="t-x">.</span><span class="t-p">log</span><span class="t-x">(
                 </button>
               </div>
               <div data-slot="panel" data-panel="py">
-                <button type="button" data-slot="command" data-copy="pip install fissionplane" data-copy-label={t.install.copyLabel} data-copied-label={t.install.copiedLabel} aria-label={t.install.copyLabel}>
+                <button type="button" data-slot="command" data-copy="pip install fissionplane" data-copy-label={t.install.copyLabel} data-copied-label={t.install.copiedLabel} aria-label={`${t.install.copyLabel}: pip install fissionplane`}>
                   <span data-slot="command-script">pip install <span data-slot="highlight">fissionplane</span></span>
                   <span data-component="copy-status" aria-hidden="true">
                     <svg data-slot="copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
@@ -257,7 +257,7 @@ sandbox<span class="t-x">.</span><span class="t-p">delete</span><span class="t-x
                 </button>
               </div>
               <div data-slot="panel" data-panel="rust">
-                <button type="button" data-slot="command" data-copy="cargo add fissionplane" data-copy-label={t.install.copyLabel} data-copied-label={t.install.copiedLabel} aria-label={t.install.copyLabel}>
+                <button type="button" data-slot="command" data-copy="cargo add fissionplane" data-copy-label={t.install.copyLabel} data-copied-label={t.install.copiedLabel} aria-label={`${t.install.copyLabel}: cargo add fissionplane`}>
                   <span data-slot="command-script">cargo add <span data-slot="highlight">fissionplane</span></span>
                   <span data-component="copy-status" aria-hidden="true">
                     <svg data-slot="copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
@@ -471,6 +471,7 @@ sandbox<span class="t-x">.</span><span class="t-p">delete</span><span class="t-x
       }
       const toastMessage = button.getAttribute("data-toast");
       if (toastMessage) showToast(toastMessage);
+      const restLabel = button.getAttribute("aria-label");
       button.setAttribute("data-copied", "");
       button.setAttribute(
         "aria-label",
@@ -480,7 +481,9 @@ sandbox<span class="t-x">.</span><span class="t-p">delete</span><span class="t-x
         button.removeAttribute("data-copied");
         button.setAttribute(
           "aria-label",
-          button.getAttribute("data-copy-label") || "Copy install command",
+          restLabel ||
+            button.getAttribute("data-copy-label") ||
+            "Copy install command",
         );
       }, 2000);
     });

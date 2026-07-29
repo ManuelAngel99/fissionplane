@@ -58,7 +58,7 @@ const year = new Date().getFullYear();
     {t.footer.license}
   </a>
   <details data-component="lang-picker">
-    <summary aria-label={t.footer.languageLabel}>
+    <summary aria-label={`${t.footer.languageLabel}: ${LOCALE_LABELS[lang]}`}>
       {LOCALE_LABELS[lang]}
       <svg
         width="10"

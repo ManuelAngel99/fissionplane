@@ -203,7 +203,7 @@ export const zh: Dictionary = {
     regionLabel: 'Cookie 提示',
     heading: 'Cookie 提示',
     body: '我们使用统计分析来了解本站的使用情况。没有广告，也不会跨站追踪你。',
-    learnMore: '了解更多',
+    privacyLink: '阅读隐私声明',
     allow: '接受',
     decline: '拒绝',
   },

@@ -143,8 +143,7 @@ export interface Dictionary {
     regionLabel: string
     heading: string
     body: string
-    /** Link to the privacy page. */
-    learnMore: string
+    privacyLink: string
     allow: string
     decline: string
   }

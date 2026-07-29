@@ -44,6 +44,9 @@ coverage/
 .coverage*
 htmlcov/
 
+# Lighthouse CI reports (local runs; CI uploads them as artifacts)
+.lighthouseci/
+
 # Local secrets and machine-specific environment
 .env
 .env.*

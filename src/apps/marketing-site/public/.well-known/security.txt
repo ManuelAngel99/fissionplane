@@ -1,0 +1,6 @@
+# https://fissionplane.dev/.well-known/security.txt (RFC 9116)
+# Report vulnerabilities privately via GitHub rather than by email.
+Contact: https://github.com/ManuelAngel99/fissionplane/security/advisories/new
+Expires: 2027-07-30T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://fissionplane.dev/.well-known/security.txt

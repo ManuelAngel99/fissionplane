@@ -19,7 +19,7 @@ const { lang, t } = Astro.props;
       <strong>{t.consent.heading}</strong>
       <p>
         {t.consent.body}{" "}
-        <a href={localePath(lang, "/privacy")}>{t.consent.learnMore}</a>
+        <a href={localePath(lang, "/privacy")}>{t.consent.privacyLink}</a>
       </p>
     </div>
     {/* Refusing is one click, in the same shape and weight as accepting. */}

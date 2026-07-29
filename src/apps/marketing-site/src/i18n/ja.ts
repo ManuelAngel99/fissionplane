@@ -205,7 +205,7 @@ export const ja: Dictionary = {
     regionLabel: 'Cookie に関するお知らせ',
     heading: 'Cookie に関するお知らせ',
     body: 'このサイトの利用状況を把握するためにアクセス解析を使用します。広告やサイトをまたいだ追跡は行いません。',
-    learnMore: '詳細',
+    privacyLink: 'プライバシーに関するお知らせを読む',
     allow: '同意する',
     decline: '拒否する',
   },

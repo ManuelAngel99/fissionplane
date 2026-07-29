@@ -211,7 +211,7 @@ export const en: Dictionary = {
     regionLabel: 'Cookie notice',
     heading: 'Cookie notice',
     body: 'We use analytics to see how this site is used. No ads, and no tracking across sites.',
-    learnMore: 'Learn more',
+    privacyLink: 'Read the privacy notice',
     allow: 'Accept',
     decline: 'Decline',
   },

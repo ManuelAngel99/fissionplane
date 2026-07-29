@@ -29,7 +29,9 @@
   --color-background-interactive-weaker: hsl(64, 74%, 95%);
 
   --color-text: hsl(0, 1%, 39%);
-  --color-text-weak: hsl(0, 1%, 60%);
+  /* 46% lightness is the WCAG AA floor (4.5:1) for small text on the light
+     background; Lighthouse measured the previous 60% at ~2.8:1. */
+  --color-text-weak: hsl(0, 1%, 46%);
   --color-text-weaker: hsl(30, 2%, 81%);
   --color-text-strong: hsl(0, 5%, 12%);
   --color-text-inverted: hsl(0, 20%, 99%);
@@ -63,7 +65,8 @@
     --color-background-interactive-weaker: hsl(60, 20%, 8%);
 
     --color-text: hsl(0, 4%, 71%);
-    --color-text-weak: hsl(0, 2%, 49%);
+    /* Same WCAG AA floor on the dark background; 49% measured 4.47:1. */
+    --color-text-weak: hsl(0, 2%, 52%);
     --color-text-weaker: hsl(0, 3%, 28%);
     --color-text-strong: hsl(0, 15%, 94%);
     --color-text-inverted: hsl(0, 9%, 7%);

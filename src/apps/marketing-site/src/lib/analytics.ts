@@ -10,10 +10,10 @@
  */
 
 /** Public site tag. Visible in page source; Cloudflare scopes it by hostname. */
-export const CF_BEACON_TOKEN = "5f8aa38a1203463d881387cfc4eb0bb4";
+export const CF_BEACON_TOKEN = '5f8aa38a1203463d881387cfc4eb0bb4'
 
 export const CF_BEACON_SRC =
-  "https://static.cloudflareinsights.com/beacon.min.js";
+  'https://static.cloudflareinsights.com/beacon.min.js'
 
 /**
  * localStorage key holding the answer. Local storage rather than a cookie
@@ -21,10 +21,10 @@ export const CF_BEACON_SRC =
  * so it is strictly necessary and needs no consent of its own. Bump the
  * version to re-ask every visitor after a material change to what we measure.
  */
-export const CONSENT_STORAGE_KEY = "fp-consent:v1";
+export const CONSENT_STORAGE_KEY = 'fp-consent:v1'
 
-export const CONSENT_GRANTED = "granted";
-export const CONSENT_DENIED = "denied";
+export const CONSENT_GRANTED = 'granted'
+export const CONSENT_DENIED = 'denied'
 
 /** Last substantive change to the privacy page, rendered per locale. */
-export const PRIVACY_UPDATED = "2026-07-29";
+export const PRIVACY_UPDATED = '2026-07-29'

@@ -13,6 +13,7 @@
     "dev:marketing": "pnpm --filter @fissionplane/marketing-site dev",
     "dev:docs": "pnpm --filter @fissionplane/fissionplane-docs dev",
     "deploy:marketing": "pnpm --filter @fissionplane/marketing-site cf:deploy",
+    "check:docs": "pnpm --filter @fissionplane/fissionplane-docs check",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --type-aware apps libs/typescript",

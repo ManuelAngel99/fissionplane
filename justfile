@@ -11,9 +11,9 @@ default:
 ci: fmt-check clippy test check-guest lock deny
 
 # Format everything in place, then run every linter, then every type
-# checker, across Rust, TypeScript, Python, and the contracts. The
+# checker, across Rust, TypeScript, Python, the contracts, and product docs. The
 # fix-up pass before committing; `ci` is the read-only gate.
-lint: fmt fmt-ts fmt-python clippy lint-ts lint-sdk-ts lint-python lint-spec check check-guest typecheck-ts typecheck-python
+lint: fmt fmt-ts fmt-python clippy lint-ts lint-sdk-ts lint-python lint-spec check check-guest typecheck-ts typecheck-python check-docs
 
 # Format the whole workspace in place.
 fmt:
@@ -174,6 +174,26 @@ lint-spec:
 check-sdks:
     cd src/sdks/typescript && pnpm install && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm test
     cd src/sdks/python && uv sync --quiet && uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest -q
+
+# --- Product documentation (Mintlify) ---
+
+# Preview the public product documentation at http://localhost:3000.
+dev-docs:
+    cd src && pnpm run dev:docs
+
+# Validate the Mintlify build, links, media alternatives, and theme contrast.
+check-docs:
+    cd src && pnpm run check:docs
+
+# Run one product-documentation check in isolation.
+validate-docs:
+    cd src && pnpm --filter @fissionplane/fissionplane-docs validate
+
+check-docs-links:
+    cd src && pnpm --filter @fissionplane/fissionplane-docs broken-links
+
+check-docs-a11y:
+    cd src && pnpm --filter @fissionplane/fissionplane-docs a11y
 
 # --- TypeScript applications (Effect APIs and Vite consoles) ---
 

@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "mint dev",
+    "check": "pnpm validate && pnpm broken-links && pnpm a11y",
     "validate": "mint validate",
     "broken-links": "mint broken-links",
     "a11y": "mint a11y"

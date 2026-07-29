@@ -57,9 +57,7 @@ const lockupSource = readFileSync(
 
 /** The wordmark is the lockup's second group, moved back to the origin. */
 function wordmarkFromLockup(source) {
-  const group = source.match(
-    /<g transform="translate\(56 0\)">([\s\S]*?)<\/g>/,
-  )
+  const group = source.match(/<g transform="translate\(56 0\)">([\s\S]*?)<\/g>/)
   if (!group) throw new Error('lockup.svg is missing the wordmark group')
   return [
     '<svg width="294" height="42" viewBox="0 0 294 42" fill="none" xmlns="http://www.w3.org/2000/svg">',
@@ -74,11 +72,23 @@ const wordmarkSource = wordmarkFromLockup(lockupSource)
 /** @type {{ stem: string, source: string, scale: number }[]} */
 const assets = [
   { stem: 'fissionplane-icon-light', source: iconSource, scale: 16 },
-  { stem: 'fissionplane-icon-dark', source: toDarkVariant(iconSource), scale: 16 },
+  {
+    stem: 'fissionplane-icon-dark',
+    source: toDarkVariant(iconSource),
+    scale: 16,
+  },
   { stem: 'fissionplane-wordmark-light', source: wordmarkSource, scale: 6 },
-  { stem: 'fissionplane-wordmark-dark', source: toDarkVariant(wordmarkSource), scale: 6 },
+  {
+    stem: 'fissionplane-wordmark-dark',
+    source: toDarkVariant(wordmarkSource),
+    scale: 6,
+  },
   { stem: 'fissionplane-lockup-light', source: lockupSource, scale: 6 },
-  { stem: 'fissionplane-lockup-dark', source: toDarkVariant(lockupSource), scale: 6 },
+  {
+    stem: 'fissionplane-lockup-dark',
+    source: toDarkVariant(lockupSource),
+    scale: 6,
+  },
 ]
 
 // ---- Exact RGBA rasteriser ----------------------------------------------------

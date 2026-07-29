@@ -1,0 +1,17 @@
+/* FissionPlane brand coherence — mirrors the marketing site tokens in
+   src/apps/marketing-site/src/styles/global.css. Keep this file small:
+   prefer docs.json settings whenever one exists. */
+
+/* Mono everywhere: code uses the same brand face as the rest of the UI. */
+code,
+pre,
+kbd,
+samp {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace !important;
+}
+
+/* Brand selection color (pale yellow), readable in light and dark mode. */
+::selection {
+  background: #f8fac7;
+  color: #131010;
+}

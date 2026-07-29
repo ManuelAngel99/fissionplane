@@ -6,13 +6,13 @@ Public Astro marketing site for FissionPlane. Hosted on Cloudflare (Workers stat
 
 From `src/apps/marketing-site` (or via pnpm filter from `src/`):
 
-| Command           | Action                                   |
-| ----------------- | ---------------------------------------- |
-| `pnpm dev`        | Local Astro dev server                   |
-| `pnpm build`      | Build static site to `./dist`            |
-| `pnpm preview`    | Preview the production build locally     |
-| `pnpm cf:deploy`  | Deploy an existing build with Wrangler   |
-| `pnpm cf:dry-run` | Validate an existing build locally       |
+| Command           | Action                                 |
+| ----------------- | -------------------------------------- |
+| `pnpm dev`        | Local Astro dev server                 |
+| `pnpm build`      | Build static site to `./dist`          |
+| `pnpm preview`    | Preview the production build locally   |
+| `pnpm cf:deploy`  | Deploy an existing build with Wrangler |
+| `pnpm cf:dry-run` | Validate an existing build locally     |
 
 From the TypeScript workspace root (`src/`):
 

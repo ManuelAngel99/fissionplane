@@ -10,9 +10,8 @@ lives in the repository's top-level [`docs`](../../../docs) directory.
 ## Local development
 
 ```sh
-cd src
-pnpm install
-pnpm --filter @fissionplane/fissionplane-docs dev
+just install-ts
+just dev-docs
 ```
 
 The preview is available at `http://localhost:3000`.
@@ -20,10 +19,11 @@ The preview is available at `http://localhost:3000`.
 Before submitting documentation changes, run:
 
 ```sh
-pnpm --filter @fissionplane/fissionplane-docs validate
-pnpm --filter @fissionplane/fissionplane-docs broken-links
-pnpm --filter @fissionplane/fissionplane-docs a11y
+just check-docs
 ```
+
+Use `just validate-docs`, `just check-docs-links`, or `just check-docs-a11y`
+when you need one check in isolation.
 
 ## Deployment
 
@@ -31,3 +31,7 @@ Mintlify deploys this directory from the `main` branch of
 [`ManuelAngel99/fissionplane`](https://github.com/ManuelAngel99/fissionplane).
 The deployment's Git settings must enable **docs.json is in a subdirectory**
 with `src/apps/fissionplane-docs` as the directory.
+
+`.github/workflows/docs.yml` runs the same validation for pull requests and
+pushes that affect this app. Mintlify deploys accepted changes from `main`
+through its GitHub App; no publishing secret is stored in GitHub Actions.

@@ -4,15 +4,53 @@
   "theme": "aspen",
   "favicon": "/favicon.svg",
   "colors": {
-    "primary": "#777171",
-    "light": "#bdbaba",
-    "dark": "#837c7c"
+    "primary": "#4B4646",
+    "light": "#B7B1B1",
+    "dark": "#847E7E"
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg",
+    "href": "https://fissionplane.dev"
+  },
+  "appearance": {
+    "default": "system"
+  },
+  "fonts": {
+    "family": "IBM Plex Mono",
+    "heading": {
+      "family": "IBM Plex Mono",
+      "weight": 700
+    }
+  },
+  "icons": {
+    "library": "lucide"
+  },
+  "background": {
+    "color": {
+      "light": "#FCFAFA",
+      "dark": "#131110"
+    }
+  },
+  "styling": {
+    "codeblocks": {
+      "theme": {
+        "light": "github-light",
+        "dark": "github-dark-default"
+      }
+    }
   },
   "navbar": {
     "primary": {
       "type": "github",
       "href": "https://github.com/ManuelAngel99/fissionplane"
-    }
+    },
+    "links": [
+      {
+        "label": "fissionplane.dev",
+        "href": "https://fissionplane.dev"
+      }
+    ]
   },
   "navigation": {
     "tabs": [

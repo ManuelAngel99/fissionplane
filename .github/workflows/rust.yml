@@ -13,11 +13,48 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   # Incremental artifacts are wasted work on ephemeral runners.
-  CARGO_INCREMENTAL: "0"
+  CARGO_INCREMENTAL: '0'
 
 jobs:
+  # Run the expensive jobs only when something Rust can observe changed.
+  # The workflow itself always runs (and reports success) so required
+  # status checks never sit pending on marketing- or docs-only changes.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain.toml'
+              - 'rustfmt.toml'
+              - 'deny.toml'
+              - '.config/nextest.toml'
+              - 'src/apps/vm-init/**'
+              - 'src/apps/vm-host/**'
+              - 'src/apps/vm-steward/**'
+              - 'src/apps/gateway/**'
+              - 'src/apps/control-plane/**'
+              - 'src/apps/template-builder/**'
+              - 'src/libs/rust/**'
+              - 'src/sdks/rust/**'
+              - 'justfile'
+              - '.github/workflows/rust.yml'
+
   fmt:
     name: Rustfmt
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -27,6 +64,8 @@ jobs:
 
   clippy:
     name: Clippy
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -35,19 +74,21 @@ jobs:
       # the target dirs are near-identical and PRs should hit main's.
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "rust-ci"
+          shared-key: 'rust-ci'
           cache-on-failure: true
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
   test:
     name: Test
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "rust-ci"
+          shared-key: 'rust-ci'
           cache-on-failure: true
       - uses: taiki-e/install-action@v2
         with:
@@ -58,6 +99,8 @@ jobs:
 
   deny:
     name: Deny
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -71,6 +114,8 @@ jobs:
   # time.
   build-guest:
     name: Guest binaries (musl)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -78,7 +123,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "rust-ci"
+          shared-key: 'rust-ci'
           cache-on-failure: true
       - run: cargo build --release --locked --target x86_64-unknown-linux-musl -p vm-init -p vm-steward
       - name: Verify static linkage
@@ -87,3 +132,26 @@ jobs:
             file "target/x86_64-unknown-linux-musl/release/$bin" | tee /dev/stderr | grep -q 'static' \
               || { echo "$bin is not statically linked" >&2; exit 1; }
           done
+
+  # Single required status check; passes when the path filter skipped
+  # the pipeline.
+  status-check:
+    name: Rust CI Status
+    runs-on: ubuntu-latest
+    needs: [changes, fmt, clippy, test, deny, build-guest]
+    if: always()
+    steps:
+      - name: Check job status
+        run: |
+          if [ "${{ needs.changes.outputs.rust }}" != "true" ]; then
+            echo "No Rust-affecting changes; skipping."
+            exit 0
+          fi
+          results="${{ needs.fmt.result }} ${{ needs.clippy.result }} ${{ needs.test.result }} ${{ needs.deny.result }} ${{ needs.build-guest.result }}"
+          for result in $results; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              echo "One or more Rust jobs failed"
+              exit 1
+            fi
+          done
+          echo "All Rust checks passed"

@@ -1,35 +1,38 @@
-name: Deploy marketing site
+name: Marketing site
 
 on:
-  push:
-    branches: [main]
+  pull_request:
     paths:
       - 'src/apps/marketing-site/**'
-      - '.github/workflows/deploy-marketing.yml'
+      - 'src/package.json'
+      - 'src/pnpm-lock.yaml'
+      - 'src/pnpm-workspace.yaml'
+      - '.github/workflows/marketing.yml'
+      - 'justfile'
   workflow_dispatch:
 
 concurrency:
-  group: deploy-marketing-production
+  group: marketing-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  deploy:
-    name: Validate and deploy
+  validate:
+    name: Validate, build, and audit
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: src
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.0
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.0
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.30.3
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
@@ -40,7 +43,7 @@ jobs:
         run: pnpm --filter @fissionplane/marketing-site format:check
       - name: Check workflow formatting
         working-directory: .
-        run: src/node_modules/.bin/oxfmt --config src/.oxfmtrc.json --check .github/workflows/deploy-marketing.yml
+        run: src/node_modules/.bin/oxfmt --config src/.oxfmtrc.json --check .github/workflows/marketing.yml
       - name: Lint
         run: pnpm --filter @fissionplane/marketing-site lint
       - name: Typecheck Astro site
@@ -51,17 +54,13 @@ jobs:
         run: pnpm --filter @fissionplane/marketing-site build
       - name: Validate Worker bundle
         run: pnpm --filter @fissionplane/marketing-site cf:dry-run
-      - name: Deploy to Cloudflare Workers
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: pnpm --filter @fissionplane/marketing-site cf:deploy
-      # Audits the live site right after deploy: the only place where CDN
-      # behavior (immutable /_astro/* cache TTLs, compression, HTTP/2+) is
-      # observable. Failing budgets here mean a bad deploy, not a bad build.
-      - name: Lighthouse production audit
+      # Audits the built dist over a local static server: catches content
+      # and markup regressions (link text, hreflang, LCP, a11y) before
+      # merge. CDN behavior (cache TTLs, compression) is covered by the
+      # post-deploy production audit in deploy-marketing.yml.
+      - name: Lighthouse budgets
         uses: treosh/lighthouse-ci-action@v12
         with:
-          configPath: src/apps/marketing-site/lighthouserc.prod.json
+          configPath: src/apps/marketing-site/lighthouserc.json
           uploadArtifacts: true
           temporaryPublicStorage: true

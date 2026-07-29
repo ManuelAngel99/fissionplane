@@ -1,0 +1,112 @@
+---
+title: "Authenticate Requests to the FissionPlane API"
+sidebarTitle: "Authentication"
+description: "Pass an API key or OIDC bearer token to the control plane. The data plane uses short-lived capability tokens minted by the control plane."
+---
+
+FissionPlane separates authentication into two layers that match its two APIs. The control plane accepts your long-lived organisation credential — either an API key or an OIDC bearer token. The data plane accepts only capability tokens: short-lived, epoch-bound credentials that the control plane mints on your behalf. This separation means your organisation API key never travels to the sandbox itself.
+
+## Control plane authentication
+
+### API key
+
+Pass your API key in the `X-API-Key` header on every control plane request:
+
+```bash
+curl https://api.example.com/v1/sandboxes \
+  -H "X-API-Key: <your-api-key>"
+```
+
+The API key is an opaque string tied to your organisation. Store it in an environment variable or a secrets manager and never include it in client-side code.
+
+### OIDC bearer token
+
+If your organisation integrates with an identity provider, you can use an OIDC bearer token in the `Authorization: Bearer` header instead of an API key:
+
+```bash
+curl https://api.example.com/v1/sandboxes \
+  -H "Authorization: Bearer <oidc-token>"
+```
+
+When you supply both an API key (`X-API-Key`) and an OIDC token (`Authorization: Bearer`) in the same request, the API key takes precedence.
+
+<Tip>
+  Use OIDC tokens when integrating FissionPlane with an identity provider such as
+  Okta, Auth0, or your own issuer. OIDC tokens let you scope access to individual
+  users or services without creating separate API keys for each one.
+</Tip>
+
+## Data plane authentication
+
+The sandbox data plane does not accept your organisation API key. It only accepts **capability tokens** — short-lived, cryptographically signed credentials that the control plane mints and that carry the sandbox ID, the current epoch, a port scope, and an expiry time.
+
+Pass a capability token in the `X-Sandbox-Token` header on every data plane request:
+
+```bash
+curl -X POST https://50000-<sandbox-id>.sandboxes.example.com/commands \
+  -H "X-Sandbox-Token: <capability-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"echo","args":["hello"]}'
+```
+
+The gateway verifies the token and the owning node verifies it again. The token is stripped before any data reaches the guest process.
+
+### Minting a capability token
+
+Call `POST /v1/sandboxes/{sandboxId}/token` on the control plane to mint a fresh token:
+
+```bash
+curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/token \
+  -H "X-API-Key: <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"ttl_seconds": 300}'
+```
+
+The response contains the token string and its expiry:
+
+```json
+{
+  "token": "eyJ...",
+  "expires_at": "2024-11-01T12:05:00Z",
+  "epoch": 3,
+  "ports": null
+}
+```
+
+Tokens expire. Mint a new one before the current one expires, or after a sandbox resumes (which advances the epoch and invalidates all previous tokens).
+
+### Token attenuation
+
+You can restrict a capability token to specific ports by supplying the `ports` array when minting:
+
+```bash
+curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/token \
+  -H "X-API-Key: <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"ttl_seconds": 3600, "ports": [3000]}'
+```
+
+An attenuated token can only narrow the scope your own credential permits — you cannot mint a token with broader access than you currently have.
+
+<Note>
+  If you use the TypeScript SDK, you do not need to mint or manage capability
+  tokens yourself. The SDK stores the token returned when a sandbox is created or
+  resumed and automatically re-mints it when the current one nears expiry. You
+  only need to mint tokens manually when calling the data plane directly, or when
+  you want to hand a scoped credential to a browser client or third party.
+</Note>
+
+<Warning>
+  Never send your organisation API key to the data plane or to browser code.
+  Use capability tokens for all data plane access and for any credential you
+  hand to a client outside your server.
+</Warning>
+
+## Authentication errors
+
+| Status | Meaning |
+|--------|---------|
+| `401 Unauthorized` | The credential is missing, malformed, or expired. The control plane returns an identical 401 whether or not the addressed resource exists, to prevent enumeration. |
+| `403 Forbidden` | The credential is valid but does not permit this operation — for example, attempting to expose a reserved port or mint a token with a wider scope. |
+
+Both errors follow the standard [error format](/api/overview#error-format) with a machine-readable `code` field.

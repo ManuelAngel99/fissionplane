@@ -1,0 +1,90 @@
+---
+title: "FissionPlane Architecture: Four Planes, One Cluster"
+sidebarTitle: "Architecture"
+description: "FissionPlane splits into four planes: control, gateway, node runtime, and guest. The data path bypasses the control plane so workloads survive outages."
+---
+
+FissionPlane is organized into four planes, each with a distinct role and failure boundary. The separation is intentional and load-bearing: a failure in one plane must not take down the others. The most important consequence for you as a user is that your running sandboxes and functions keep serving traffic even if the control plane goes down — because the control plane never touches the data path.
+
+## The four planes
+
+```
+                 ╔═ your kubernetes cluster ═══════════════════════════╗
+╔══════════════╗ ║   ┌───────────────┐          ┌──────────────────┐   ║░
+║  SDK / REST  ║─╫──▶│    gateway    │──mTLS───▶│  node runtime    │   ║░
+╚══════════════╝ ║   │ TLS · routing │          │  ┌────────────┐  │   ║░
+ ░░░░░░░░░░░░░░  ║   └───────────────┘          │  │ ▪ microVM  │  │   ║░
+                 ║   ┌───────────────┐          │  │ ▪ microVM  │  │   ║░
+                 ║   │ control plane │──gRPC───▶│  │ ▪ microVM  │  │   ║░
+                 ║   │ place · quota │          │  └────────────┘  │   ║░
+                 ║   └───────────────┘          └────────┬─────────┘   ║░
+                 ║                                 pause │ resume      ║░
+                 ║                              ┌────────▼─────────┐   ║░
+                 ║                              │  object storage  │   ║░
+                 ║                              └──────────────────┘   ║░
+                 ╚═════════════════════════════════════════════════════╝░
+                  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+```
+
+### Control plane — your API endpoint
+
+The control plane is what your SDK and REST calls talk to. It handles authentication, enforces quotas, resolves template aliases to artifact IDs, chooses which node to place a new sandbox on, mints capability tokens, and records the state of every sandbox and template in your organization.
+
+What the control plane deliberately does **not** do: proxy workload traffic. When your code runs `sandbox.commands.run()` or reads a file, that request goes directly from the SDK to the node that owns the microVM — the control plane is never in the path. This means a control-plane outage only interrupts lifecycle operations (creating, pausing, resuming, deleting). Sandboxes already running keep running and keep accepting commands.
+
+### Gateway — stable HTTPS URLs for your workloads
+
+The gateway terminates TLS and routes incoming requests to the right node. Every port you expose from a sandbox gets a stable HTTPS URL in the form `https://<port>-<sandbox-id>.<your-domain>`. The gateway parses the sandbox ID out of the hostname, checks whether the port is public or private (verifying a capability token if private), and forwards the connection to the owning node over a mutually-authenticated link.
+
+The gateway is stateless and horizontally scalable. It carries no business logic — it knows nothing about templates, quotas, or your organization structure. It just routes.
+
+### Node runtime — where microVMs live
+
+The node runtime runs as a privileged process on each sandbox node. It is the only component that creates, pauses, resumes, and destroys Firecracker microVMs. It manages per-sandbox networking, resource limits, and disk state. It also re-verifies capability tokens when traffic arrives from the gateway, and strips all platform credentials before anything reaches your code inside the sandbox.
+
+Each node runtime is the authority on its own node's capacity. Replicas of the control plane never need to lock against each other to make placement decisions — they simply ask the node.
+
+### Guest plane — treated as hostile
+
+The guest plane is whatever runs inside the microVM: your code, libraries, processes, and the thin in-guest agent that the platform uses to execute commands and relay filesystem operations. FissionPlane treats everything from the guest plane as untrusted input. No platform credential ever crosses the guest boundary. See [Security](/concepts/security) for the full reasoning.
+
+## Key resilience property
+
+Running sandboxes survive a control-plane outage because the control plane is off the data path entirely. Once a sandbox is `running`, all command and file operations go directly between the SDK and the node — the control plane never sees those bytes. Only lifecycle operations (create, pause, resume, delete, token minting) require the control plane to be up.
+
+<Note>
+This property has a time bound. Deadlines are enforced by the node runtime from outside the guest. If the control plane is down, deadline extensions cannot be applied, but existing deadlines are still enforced — the node will terminate sandboxes that reach their deadline even with no control-plane connectivity.
+</Note>
+
+## How Kubernetes fits in
+
+FissionPlane deploys into an existing Kubernetes cluster with a single Helm chart. It requires no custom resource definitions, no operators, and no cluster-wide changes. Kubernetes provides scheduling and node management; FissionPlane adds labelled and tainted node pools so sandbox workloads run only on dedicated nodes, keeping your existing cluster workloads entirely separate.
+
+The control plane and gateway run as ordinary Kubernetes workloads. The node runtime runs on each dedicated sandbox node with the privileges needed to manage microVMs. Kubernetes sees the control plane and gateway processes; it does not see individual microVMs — those are managed entirely by the node runtime below Kubernetes' visibility.
+
+## Pause and resume with object storage
+
+When you pause a sandbox, the node runtime saves a full snapshot — memory, filesystem state, and device state — to object storage. The snapshot is what makes resume fast: instead of booting from scratch, the node restores memory and device state directly from the artifact. On resume, the platform prefers to place the sandbox back on the node that created the snapshot, since that node's local cache almost certainly still holds the artifact.
+
+Object storage is also the durability boundary. Node failures do not lose paused sandboxes because the snapshot is already off-node by the time the pause operation returns to you.
+
+## The request path for workload traffic
+
+When you or your users hit a sandbox's public URL, the request flows like this:
+
+<Steps>
+  <Step title="Gateway receives the request">
+    The gateway parses the sandbox ID from the hostname, looks up the per-port exposure record, and checks whether the port is public (no credential required) or private (capability token required).
+  </Step>
+  <Step title="Gateway forwards to the node">
+    The gateway resolves the sandbox to its owning node and proxies the request over a mutually-authenticated connection.
+  </Step>
+  <Step title="Node runtime re-verifies and strips credentials">
+    The node runtime re-verifies the capability token (if the port is private), then strips any platform credential from the request before forwarding it to your code inside the microVM.
+  </Step>
+  <Step title="Your code receives a clean request">
+    The code running inside the sandbox sees the original request with no platform headers or tokens attached.
+  </Step>
+</Steps>
+
+For more on how credentials and tokens work in this flow, see [Security](/concepts/security).

@@ -1,0 +1,316 @@
+---
+title: "FissionPlane Rust SDK: Async Sandboxes and Templates"
+sidebarTitle: "Rust"
+description: "Add the fissionplane crate to your Rust project. Async Tokio-based client for sandboxes, commands, file I/O, port exposure, and template builds."
+---
+
+The `fissionplane` crate connects your Rust applications to a self-hosted FissionPlane installation. The client is fully async, built on Tokio, and gives you typed access to sandboxes, commands, file operations, port exposure, and template builds. Every network call returns `fissionplane::Error`, making error handling straightforward to pattern-match.
+
+## Requirements
+
+Before you add the crate, make sure you have:
+
+- Rust 1.97 or later
+- A Tokio runtime
+- A running FissionPlane control plane and its URL
+- An API key or OIDC bearer token
+- A template alias or template artifact ID to use when creating sandboxes
+
+## Installation
+
+Add the crate to your project:
+
+```bash
+cargo add fissionplane
+```
+
+The SDK is async-only. Add Tokio if your application does not already depend on it:
+
+```bash
+cargo add tokio --features macros,rt-multi-thread
+```
+
+## Configuration
+
+Set your control plane URL and API key as environment variables so `ClientOptions::new()` picks them up automatically:
+
+```bash
+export FISSIONPLANE_API_URL="https://api.sandbox.example.com"
+export FISSIONPLANE_API_KEY="your-api-key"
+```
+
+Then construct the client:
+
+```rust
+use fissionplane::{ClientOptions, FissionPlane};
+
+let client = FissionPlane::new(ClientOptions::new())?;
+```
+
+You can also pass values directly using the builder methods:
+
+```rust
+let client = FissionPlane::new(
+    ClientOptions::new()
+        .base_url("https://api.sandbox.example.com")
+        .api_key("your-api-key"),
+)?;
+```
+
+Use `ClientOptions::access_token()` instead of `api_key()` when authenticating with an OIDC bearer token. When you set both, `api_key()` takes precedence. The constructor rejects an empty credential or one that contains whitespace, returning `Error::Config` before any network call is made.
+
+### Client Options
+
+<ParamField body="base_url()" type="&str">
+  The URL of your FissionPlane control plane. Reads from the `FISSIONPLANE_API_URL` environment variable when not called.
+</ParamField>
+
+<ParamField body="api_key()" type="&str">
+  Your API key. Reads from the `FISSIONPLANE_API_KEY` environment variable when not called. Takes precedence over `access_token()`.
+</ParamField>
+
+<ParamField body="access_token()" type="&str">
+  An OIDC bearer token. Used when `api_key()` is not set.
+</ParamField>
+
+<ParamField body="request_timeout()" type="Duration" default="DEFAULT_REQUEST_TIMEOUT">
+  Bounds one HTTP attempt on either plane, including reading the response body, and also bounds a WebSocket handshake. Pass `Duration::ZERO` to disable timeouts entirely.
+</ParamField>
+
+<ParamField body="max_retries()" type="usize" default="DEFAULT_MAX_RETRIES">
+  Number of additional attempts after a first failure, spaced by exponential backoff with full jitter. Pass `0` to disable retries. The SDK only retries safe operations or writes with an idempotency key.
+</ParamField>
+
+<ParamField body="user_agent()" type="&str">
+  Replaces the default `User-Agent: fissionplane-rust/<version>` header on all requests to both the control plane and the sandbox data plane.
+</ParamField>
+
+## Create a Sandbox and Run a Command
+
+Sandbox creation returns after a node acknowledges the sandbox. Use `Commands::run()` when you need the command's full output after it finishes.
+
+```rust
+use fissionplane::models::{CreateSandboxRequest, RunCommandRequest};
+use fissionplane::{ClientOptions, FissionPlane};
+
+#[tokio::main]
+async fn main() -> Result<(), fissionplane::Error> {
+    let client = FissionPlane::new(ClientOptions::new())?;
+
+    let sandbox = client
+        .sandboxes()
+        .create(
+            CreateSandboxRequest {
+                template: "base".to_owned(),
+                name: Some("example-job".to_owned()),
+                deadline_seconds: Some(600),
+                ..Default::default()
+            },
+            Some("example-job-1"),
+        )
+        .await?;
+
+    let result = sandbox
+        .commands()?
+        .run(RunCommandRequest {
+            command: "sh".to_owned(),
+            args: Some(vec![
+                "-c".to_owned(),
+                "printf 'hello from FissionPlane\\n'".to_owned(),
+            ]),
+            timeout_seconds: Some(30),
+            ..Default::default()
+        })
+        .await?;
+
+    println!("{}", result.stdout);
+    println!("exit code: {}", result.exit_code);
+    sandbox.delete().await?;
+    Ok(())
+}
+```
+
+`Commands::run()` waits for the process to exit and returns its exit code, standard output, standard error, and an optional truncation flag. Use `Commands::list_processes()` to list supervised processes, and `Commands::kill(pid, Some(Signal::Term))` to signal one.
+
+## Background Processes and PTY
+
+When you need to follow output in real time or keep stdin open, start a background process with `commands.start()`. Pass a `PtySize` to allocate a pseudo-terminal.
+
+```rust
+use futures_util::StreamExt;
+use fissionplane::models::{ProcessStreamEvent, PtySize, StartProcessRequest};
+
+let process = sandbox.commands()?.start(StartProcessRequest {
+    command: "bash".to_owned(),
+    pty: Some(PtySize { cols: 120, rows: 40 }),
+    ..Default::default()
+}).await?;
+
+let mut attachment = process.attach(0).await?;
+attachment.send_input("pwd\n").await?;
+
+while let Some(event) = attachment.next().await {
+    if matches!(event?, ProcessStreamEvent::Exit { .. }) {
+        break;
+    }
+}
+```
+
+`attachment` implements `StreamExt`, so you can use `.next().await` in a loop or combine it with other stream combinators. Break out at any time to stop consuming events.
+
+## Filesystem Operations
+
+Access filesystem operations through `sandbox.files()?`. The handle provides:
+
+- `list()` — read directory entries below a path
+- `stat()` — read metadata for a single path
+- `make_dir()` — create a directory (and parents)
+- `write()` / `upload()` — upload bytes to a path
+- `read()` / `download()` — download bytes from a path
+- `move_path()` — move or rename a path
+- `remove()` — remove a file or directory
+- `watch()` — open a recursive WebSocket watch for filesystem change events
+
+All calls target the sandbox data plane directly.
+
+## Sandbox Lifecycle
+
+A sandbox moves through four visible states: `Running`, `Paused`, `Terminated`, and `Failed`.
+
+```rust
+sandbox.pause().await?;
+sandbox.resume(Some(600)).await?;
+sandbox.extend_deadline(900).await?;
+sandbox.delete().await?;
+```
+
+`pause()` snapshots the sandbox and releases the underlying node capacity. `resume()` restores the snapshot on a node and gives the sandbox a new epoch.
+
+<Note>
+  Capability tokens are scoped to a single sandbox epoch. After `resume()`, the SDK automatically replaces the token on the handle. Handles returned by `Sandboxes::get()` or `Sandboxes::list()` carry no token — call `Sandbox::mint_token()` before creating a `Commands` or `Files` handle from them. When the data plane rejects an expired token, the SDK mints a replacement through the control plane and replays the call once. A WebSocket handshake the agent rejects reconnects the same way. The replacement preserves the port scope of the token it replaces, so a refresh never widens an attenuated token.
+</Note>
+
+Pass an idempotency key to `Sandboxes::create()` so that retries return the same sandbox instead of creating a duplicate.
+
+## Port Exposure
+
+Every sandbox port is private by default, accessible only with a capability token. Make a port public only when anonymous access is required.
+
+```rust
+use fissionplane::models::PortVisibility;
+
+let ports = sandbox.ports();
+let exposure = ports.expose(3000, PortVisibility::Public).await?;
+println!("{}", exposure.url);
+
+let records = ports.list().await?;
+println!("{} exposure records", records.items.len());
+ports.unexpose(3000).await?;
+```
+
+`unexpose()` removes the exposure record and returns the port to private access.
+
+## Build and Use a Template
+
+Template builds run asynchronously on your FissionPlane installation. Start a build, wait for it to finish, then reference the template by alias when creating sandboxes.
+
+```rust
+use fissionplane::models::CreateTemplateBuildRequest;
+use fissionplane::WaitOptions;
+
+let mut build = client
+    .templates()
+    .build(CreateTemplateBuildRequest {
+        image: "python:3.12".to_owned(),
+        alias: Some("python-tools".to_owned()),
+        ..Default::default()
+    })
+    .await?;
+
+let template = build.wait(WaitOptions::default()).await?;
+println!("{:?}", template.artifact_id);
+```
+
+Stream build output with `TemplateBuildHandle::logs(offset)`. Pass `next_offset` from each response into the next call to avoid re-reading lines. Use `Templates::get_build(build_id)` to reconnect to a build started in a previous process.
+
+## List Sandboxes
+
+Read a single page of sandboxes filtered by state, metadata, or limit:
+
+```rust
+use fissionplane::{ListSandboxesFilter, FissionPlane};
+use fissionplane::models::SandboxState;
+
+let page = client
+    .sandboxes()
+    .list(ListSandboxesFilter {
+        state: Some(SandboxState::Running),
+        limit: Some(20),
+        ..Default::default()
+    })
+    .await?;
+println!("{} sandboxes", page.items.len());
+```
+
+Use `Sandboxes::stream()` to walk every page automatically. The SDK fetches the next page only when the current one is exhausted.
+
+```rust
+use futures_util::StreamExt;
+use fissionplane::{ListSandboxesFilter, FissionPlane};
+
+let sandboxes = client.sandboxes();
+let mut all = sandboxes.stream(ListSandboxesFilter::default());
+while let Some(sandbox) = all.next().await {
+    println!("{}", sandbox?.info.sandbox_id);
+}
+```
+
+The stream ends after the first error, so a `?` inside the loop surfaces it. Use `Sandboxes::list_all()` when you want the entire collection in memory at once.
+
+## Error Handling
+
+Every SDK operation returns `fissionplane::Error`. Match on its variants to handle specific cases:
+
+```rust
+use fissionplane::Error;
+
+let result = client
+    .sandboxes()
+    .create(
+        fissionplane::models::CreateSandboxRequest {
+            template: "base".to_owned(),
+            ..Default::default()
+        },
+        None,
+    )
+    .await;
+
+match result {
+    Ok(sandbox) => println!("{}", sandbox.info.sandbox_id),
+    Err(Error::Api {
+        code,
+        retryable: true,
+        request_id,
+        ..
+    }) => {
+        eprintln!("retry later: {code:?}, request ID: {request_id:?}");
+    }
+    Err(error) => return Err(error),
+}
+```
+
+`Error` distinguishes transport failures, API errors with structured fields, missing capability tokens, failed template builds, wait timeouts, and invalid configuration.
+
+## Tracing
+
+The SDK emits `tracing` events at the `DEBUG` level when it replays a request, re-mints a capability token, or fetches a page of sandboxes. Install any `tracing` subscriber to see them — without one they cost nothing at runtime. Credentials and capability tokens never appear in events or in a `Debug` rendering of `ClientOptions`.
+
+```rust
+tracing_subscriber::fmt()
+    .with_env_filter("fissionplane=debug")
+    .init();
+```
+
+<Note>
+  The `fissionplane` crate is version `0.0.1`. The public API is unstable and may change without notice until the project publishes a stable release.
+</Note>

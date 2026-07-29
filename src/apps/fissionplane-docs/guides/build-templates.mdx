@@ -1,0 +1,299 @@
+---
+title: "Build FissionPlane Templates from Any OCI Container Image"
+sidebarTitle: "Build Templates"
+description: "Build a template from any OCI image with declarative steps. Sandboxes start in milliseconds from the pre-booted snapshot instead of a cold boot."
+---
+
+A FissionPlane template is a pre-booted microVM snapshot derived from any OCI container image. When you create a sandbox from a template, the platform restores that snapshot rather than booting a fresh VM — so startup is measured in milliseconds instead of seconds. Templates are immutable artifacts: once built, a template never changes. You reference them by an artifact ID or by a mutable alias that you control.
+
+## What a template build does
+
+Starting a build tells FissionPlane to pull the specified OCI image, boot it inside a Firecracker microVM, run each build step in order, and then snapshot the final state as an immutable artifact. The artifact captures everything: the root filesystem, in-memory state, and any pre-installed packages or configuration your build steps put in place. Future sandboxes created from this template skip all of that work and start from the finished snapshot.
+
+<Note>
+  Template builds run asynchronously on the FissionPlane installation. `templates.build()` returns a build handle immediately — the actual build work happens on the platform. Call `build.wait()` to block until the build finishes, or stream logs to follow progress in real time.
+</Note>
+
+## Starting a build
+
+Pass the OCI image, an optional alias, and an array of build steps to `client.templates.build()`.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    import { FissionPlane } from '@fissionplane/sdk'
+
+    const client = new FissionPlane()
+
+    const build = await client.templates.build({
+      image: 'node:22',
+      alias: 'node-tools',
+      steps: [
+        { command: 'npm install --global pnpm' },
+        { command: 'npm install --global typescript tsx' },
+      ],
+    })
+
+    console.log('Build started:', build.buildId)
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from fissionplane import FissionPlane, BuildStep
+
+    client = FissionPlane()
+
+    build = client.templates.build(
+        "node:22",
+        alias="node-tools",
+        steps=[
+            BuildStep(command="npm install --global pnpm"),
+            BuildStep(command="npm install --global typescript tsx"),
+        ],
+    )
+
+    print("Build started:", build.build_id)
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    use fissionplane::models::{BuildStep, CreateTemplateBuildRequest};
+    use fissionplane::{ClientOptions, FissionPlane};
+
+    let client = FissionPlane::new(ClientOptions::new())?;
+
+    let build = client
+        .templates()
+        .build(CreateTemplateBuildRequest {
+            image: "node:22".to_owned(),
+            alias: Some("node-tools".to_owned()),
+            steps: Some(vec![
+                BuildStep { command: "npm install --global pnpm".to_owned() },
+                BuildStep { command: "npm install --global typescript tsx".to_owned() },
+            ]),
+            ..Default::default()
+        })
+        .await?;
+
+    println!("Build started: {:?}", build.build_id());
+    ```
+  </Tab>
+</Tabs>
+
+## Build steps
+
+The `steps` array contains objects with a `command` field. FissionPlane runs each command inside the microVM in the order you list them, exactly once, during the build. Think of build steps as a lightweight Dockerfile `RUN` equivalent — use them to install packages, pull model weights, compile assets, or set up any state that every sandbox should start with.
+
+```ts
+steps: [
+  { command: 'apt-get update && apt-get install -y ripgrep' },
+  { command: 'pip install torch --index-url https://download.pytorch.org/whl/cpu' },
+  { command: 'mkdir -p /workspace && chmod 777 /workspace' },
+]
+```
+
+## Waiting for a build
+
+`build.wait()` blocks until the build succeeds or fails. Pass `timeoutMs` (TypeScript/Rust) or `timeout` in seconds (Python) to cap how long you wait.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    const template = await build.wait({ timeoutMs: 10 * 60 * 1000 })
+    console.log('Template ready:', template.artifactId)
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    template = build.wait(timeout=600)
+    print("Template ready:", template.artifact_id)
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    use fissionplane::WaitOptions;
+
+    let template = build.wait(WaitOptions::default()).await?;
+    println!("Template ready: {:?}", template.artifact_id);
+    ```
+  </Tab>
+</Tabs>
+
+## Streaming build logs
+
+`build.logs(offset)` fetches a page of log lines starting at the given byte offset. Pass the returned `nextOffset` to the next call to paginate through the entire log.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    let offset = 0
+    while (true) {
+      const page = await build.logs(offset)
+      process.stdout.write(page.data)
+      if (page.buildComplete) break
+      offset = page.nextOffset
+      await new Promise((r) => setTimeout(r, 500))
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import time
+
+    offset = 0
+    while True:
+        page = build.logs(offset)
+        print(page.data, end="", flush=True)
+        if page.build_complete:
+            break
+        offset = page.next_offset
+        time.sleep(0.5)
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    let mut offset = 0u64;
+    loop {
+        let page = build.logs(offset).await?;
+        print!("{}", page.data);
+        if page.build_complete {
+            break;
+        }
+        offset = page.next_offset;
+        sleep(Duration::from_millis(500)).await;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Reconnecting to a build
+
+If your process restarts while a build is in progress, use `client.templates.getBuild()` / `client.templates.get_build()` / `Templates::get_build()` to retrieve the build handle by ID and continue polling or streaming logs.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    // Persist build.buildId somewhere durable, then later:
+    const build = await client.templates.getBuild(savedBuildId)
+    const template = await build.wait({ timeoutMs: 10 * 60 * 1000 })
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    # Persist build.build_id somewhere durable, then later:
+    build = client.templates.get_build(saved_build_id)
+    template = build.wait(timeout=600)
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    // Persist the build ID somewhere durable, then later:
+    let mut build = client.templates().get_build(&saved_build_id).await?;
+    let template = build.wait(WaitOptions::default()).await?;
+    ```
+  </Tab>
+</Tabs>
+
+## Using a template to create sandboxes
+
+Pass the alias or the artifact ID to `sandboxes.create()`. The sandbox will start from the pre-booted snapshot.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    // By alias (resolves to the latest build under that alias)
+    const sandbox = await client.sandboxes.create({ template: 'node-tools' })
+
+    // By artifact ID (pinned to a specific build)
+    const sandbox = await client.sandboxes.create({ template: template.artifactId })
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    # By alias (resolves to the latest build under that alias)
+    sandbox = client.sandboxes.create("node-tools")
+
+    # By artifact ID (pinned to a specific build)
+    sandbox = client.sandboxes.create(template.artifact_id)
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    use fissionplane::models::CreateSandboxRequest;
+
+    // By alias
+    let sandbox = client
+        .sandboxes()
+        .create(
+            CreateSandboxRequest {
+                template: "node-tools".to_owned(),
+                ..Default::default()
+            },
+            None,
+        )
+        .await?;
+    ```
+  </Tab>
+</Tabs>
+
+## Template aliases
+
+An alias is a mutable, human-readable name (such as `node-tools` or `python-3.12-ml`) that resolves to an immutable artifact ID. When you build a new version of a template and assign the same alias, every future `sandboxes.create()` call using that alias picks up the new artifact automatically — no code changes required.
+
+<Tip>
+  In production, pin sandboxes to a specific artifact ID so that deployments are reproducible and a new build cannot silently change your runtime environment. Use aliases freely in development and CI, where always-latest behavior is convenient.
+
+  ```ts
+  // Development — always uses the latest build
+  const sandbox = await client.sandboxes.create({ template: 'node-tools' })
+
+  // Production — pinned to a specific immutable artifact
+  const sandbox = await client.sandboxes.create({ template: 'tpl_artifact_abc123' })
+  ```
+</Tip>
+
+## List and delete templates
+
+`client.templates.list()` returns all templates visible to your API key. `client.templates.delete(templateId)` removes a template artifact permanently.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    // List all templates
+    const templates = await client.templates.list()
+    for (const tpl of templates) {
+      console.log(tpl.artifactId, tpl.alias ?? '(no alias)')
+    }
+
+    // Delete a specific template
+    await client.templates.delete(template.artifactId)
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    # List all templates
+    templates = client.templates.list()
+    for tpl in templates:
+        alias = tpl.alias or "(no alias)"
+        print(tpl.artifact_id, alias)
+
+    # Delete a specific template
+    client.templates.delete(template.artifact_id)
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    // List all templates
+    let templates = client.templates().list().await?;
+    for tpl in &templates.items {
+        println!("{:?} {:?}", tpl.artifact_id, tpl.alias);
+    }
+
+    // Delete a specific template
+    client.templates().delete(&template.artifact_id).await?;
+    ```
+  </Tab>
+</Tabs>

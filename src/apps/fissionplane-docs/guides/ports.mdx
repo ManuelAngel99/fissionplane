@@ -1,0 +1,175 @@
+---
+title: "Expose Sandbox Ports as Public or Private HTTPS URLs"
+sidebarTitle: "Ports"
+description: "Expose any sandbox port as private or public through a stable HTTPS URL. Private ports require a capability token; public ports allow anonymous access."
+---
+
+FissionPlane routes HTTPS traffic to any port inside a running sandbox through a stable URL. By default every port is private: access requires a short-lived capability token managed by the SDK. You can make a specific port public when you need anonymous browser access or third-party webhooks — but that is an explicit, audited action that is off by default.
+
+## Default behavior: private ports
+
+Until you call `ports.expose()`, no port inside the sandbox is reachable from outside the node. When you expose a port as `"private"`, FissionPlane allocates a stable HTTPS URL for that port and requires a valid capability token on every request. The SDK handles token negotiation for you automatically when you access a private port from application code.
+
+<Note>
+  When your code accesses a private port URL through the SDK, the capability token is attached automatically. You do not need to manage tokens manually for private port access — the SDK handles minting and refreshing them on your behalf.
+</Note>
+
+## Expose a port as private
+
+Call `ports.expose(port, 'private')` to make a port reachable over HTTPS with token-gated access. The returned exposure object includes the URL.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    import { FissionPlane } from '@fissionplane/sdk'
+
+    const client = new FissionPlane()
+    const sandbox = await client.sandboxes.create({ template: 'base' })
+
+    // Start a server inside the sandbox first
+    await sandbox.commands.start('python3', {
+      args: ['-m', 'http.server', '3000'],
+    })
+
+    const exposure = await sandbox.ports.expose(3000, 'private')
+    console.log('Private URL:', exposure.url)
+    // https://3000-sbx-abc123.sandbox.example.com
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from fissionplane import FissionPlane
+
+    client = FissionPlane()
+    sandbox = client.sandboxes.create("base")
+
+    # Start a server inside the sandbox first
+    sandbox.commands.start("python3", args=["-m", "http.server", "3000"])
+
+    exposure = sandbox.ports.expose(3000, "private")
+    print("Private URL:", exposure.url)
+    # https://3000-sbx-abc123.sandbox.example.com
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    use fissionplane::models::PortVisibility;
+
+    let exposure = sandbox
+        .ports()
+        .expose(3000, PortVisibility::Private)
+        .await?;
+
+    println!("Private URL: {}", exposure.url);
+    ```
+  </Tab>
+</Tabs>
+
+## Expose a port as public
+
+Pass `'public'` to make the port anonymously accessible. Use this only when you need a browser preview or a third-party service to reach the sandbox without a token.
+
+<Warning>
+  Public port exposure makes the port accessible to anyone with the URL — no authentication or capability token is required. Only expose a port publicly when anonymous access is explicitly required for your use case. FissionPlane logs every public exposure for audit purposes and the feature is disabled by default. Management ports and agent ports can never be made public.
+</Warning>
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    const exposure = await sandbox.ports.expose(3000, 'public')
+    console.log('Public URL:', exposure.url)
+    // Share this URL with a browser or third-party service
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    exposure = sandbox.ports.expose(3000, "public")
+    print("Public URL:", exposure.url)
+    # Share this URL with a browser or third-party service
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    use fissionplane::models::PortVisibility;
+
+    let exposure = sandbox
+        .ports()
+        .expose(3000, PortVisibility::Public)
+        .await?;
+
+    println!("Public URL: {}", exposure.url);
+    ```
+  </Tab>
+</Tabs>
+
+## URL format
+
+Exposed port URLs follow this pattern:
+
+```
+https://<port>-<sandbox-id>.<domain>
+```
+
+For example, port `3000` on sandbox `sbx-abc123` at `sandbox.example.com` becomes:
+
+```
+https://3000-sbx-abc123.sandbox.example.com
+```
+
+The URL is stable for the lifetime of the exposure record. If you unexpose a port and re-expose it, the URL remains the same.
+
+## List exposed ports
+
+`ports.list()` returns all active exposure records for the sandbox, including their port numbers, visibility settings, and URLs.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    const records = await sandbox.ports.list()
+    for (const record of records) {
+      console.log(`port ${record.port} (${record.visibility}): ${record.url}`)
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    records = sandbox.ports.list()
+    for record in records:
+        print(f"port {record.port} ({record.visibility}): {record.url}")
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    let records = sandbox.ports().list().await?;
+    println!("{} exposure records", records.items.len());
+    for record in &records.items {
+        println!("port {}: {}", record.port, record.url);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Unexpose a port
+
+`ports.unexpose(port)` removes the exposure record for the given port. After this call, the port returns to private access and the URL becomes unreachable.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```ts
+    await sandbox.ports.unexpose(3000)
+    console.log('Port 3000 is now private again')
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    sandbox.ports.unexpose(3000)
+    print("Port 3000 is now private again")
+    ```
+  </Tab>
+  <Tab title="Rust">
+    ```rust
+    sandbox.ports().unexpose(3000).await?;
+    println!("Port 3000 is now private again");
+    ```
+  </Tab>
+</Tabs>

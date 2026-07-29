@@ -1,0 +1,90 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "FissionPlane",
+  "theme": "aspen",
+  "favicon": "https://media.brand.dev/8e121207-80b7-4e0e-8746-49087740825e.svg",
+  "colors": {
+    "primary": "#837c7c",
+    "light": "#171717",
+    "dark": "#bdbaba"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/ManuelAngel99/fissionplane"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/sandboxes",
+              "concepts/templates",
+              "concepts/functions",
+              "concepts/architecture",
+              "concepts/security"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/run-commands",
+              "guides/filesystem",
+              "guides/ports",
+              "guides/pause-resume",
+              "guides/build-templates"
+            ]
+          },
+          {
+            "group": "SDKs",
+            "pages": [
+              "sdks/typescript",
+              "sdks/python",
+              "sdks/rust"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "Control Plane",
+            "pages": [
+              "api/sandboxes",
+              "api/templates",
+              "api/tokens"
+            ]
+          },
+          {
+            "group": "Data Plane",
+            "pages": [
+              "api/commands",
+              "api/files",
+              "api/streaming"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

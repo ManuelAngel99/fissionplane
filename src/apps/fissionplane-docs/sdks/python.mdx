@@ -1,0 +1,279 @@
+---
+title: "FissionPlane Python SDK: Sandboxes, Commands, and Templates"
+sidebarTitle: "Python"
+description: "Install and configure the fissionplane Python package. Use sync or async clients to manage sandboxes, run commands, stream output, and build templates."
+---
+
+The `fissionplane` package connects your Python applications to a self-hosted FissionPlane installation. It ships both a synchronous client for scripts and services and an asynchronous client for applications built on `asyncio`. You can create sandboxes, run commands, stream process output, manage files, expose ports, and build templates from OCI images.
+
+## Requirements
+
+Before you install the SDK, make sure you have:
+
+- Python 3.10 or later
+- A running FissionPlane control plane and its URL
+- An API key or OIDC bearer token
+- A template alias or template artifact ID to use when creating sandboxes
+
+## Installation
+
+<CodeGroup>
+```bash pip
+pip install fissionplane
+```
+
+```bash uv
+uv add fissionplane
+```
+</CodeGroup>
+
+## Configuration
+
+Set your control plane URL and API key as environment variables so the client picks them up automatically:
+
+```bash
+export FISSIONPLANE_API_URL="https://api.sandbox.example.com"
+export FISSIONPLANE_API_KEY="your-api-key"
+```
+
+Then construct the client with no arguments:
+
+```python
+from fissionplane import FissionPlane
+
+client = FissionPlane()
+```
+
+You can also pass values directly to the constructor:
+
+```python
+client = FissionPlane(
+    base_url="https://api.sandbox.example.com",
+    api_key="your-api-key",
+)
+```
+
+Use `access_token` instead of `api_key` when authenticating with an OIDC bearer token. When you supply both, `api_key` takes precedence. The constructor rejects an empty credential or one that contains whitespace.
+
+### Client Options
+
+<ParamField body="base_url" type="str">
+  The URL of your FissionPlane control plane. Reads from the `FISSIONPLANE_API_URL` environment variable when not provided.
+</ParamField>
+
+<ParamField body="api_key" type="str">
+  Your API key. Reads from the `FISSIONPLANE_API_KEY` environment variable when not provided. Takes precedence over `access_token`.
+</ParamField>
+
+<ParamField body="access_token" type="str">
+  An OIDC bearer token. Used when `api_key` is not set.
+</ParamField>
+
+<ParamField body="request_timeout" type="float" default="60">
+  Seconds before a request is aborted. Pass `0` or `None` to disable timeouts. You can also pass `request_timeout` on any individual call to override this default for that call only.
+</ParamField>
+
+<ParamField body="max_retries" type="int" default="2">
+  Number of additional attempts after a failed request. The SDK retries reads, `sandboxes.create()` when you pass an `idempotency_key`, and responses the server marks retryable (or status 429 and 5xx). Set to `0` to disable retries.
+</ParamField>
+
+<ParamField body="logger" type="logging.Logger">
+  A Python logger that receives `DEBUG`-level messages about retries, capability token re-mints, and page fetches. Defaults to the `fissionplane` logger.
+</ParamField>
+
+<ParamField body="headers" type="dict[str, str]">
+  Extra headers added to every request. Per-call `headers` override these for that call.
+</ParamField>
+
+<ParamField body="httpx_args" type="dict">
+  Additional keyword arguments forwarded to the underlying `httpx` client. Values here win over SDK defaults, including `timeout` and `headers`.
+</ParamField>
+
+## Create a Sandbox and Run a Command
+
+Sandbox creation is synchronous. The call returns after a node acknowledges the sandbox. Wrap your work in a `try/finally` block to ensure cleanup.
+
+```python
+from fissionplane import FissionPlane
+
+client = FissionPlane()
+sandbox = client.sandboxes.create(
+    "base",
+    name="example-job",
+    deadline_seconds=600,
+    idempotency_key="example-job-1",
+)
+
+try:
+    result = sandbox.commands.run(
+        "python",
+        args=["-c", "print('hello from FissionPlane')"],
+        timeout_seconds=30,
+    )
+    print(result.stdout)
+    print(result.exit_code)
+finally:
+    sandbox.delete()
+```
+
+`commands.run()` waits for the process to exit and returns its exit code, standard output, standard error, and an optional truncation flag. Use `sandbox.commands.list_processes()` to list supervised processes, and `sandbox.commands.kill(pid, "SIGTERM")` to send a signal to one.
+
+## Background Processes and PTY
+
+When you need to follow output in real time or keep stdin open, start a background process with `commands.start()`. Pass a `PtySize` to allocate a pseudo-terminal.
+
+```python
+from fissionplane import PtySize
+
+process = sandbox.commands.start("bash", pty=PtySize(cols=120, rows=40))
+attachment = process.attach()
+attachment.send_input("pwd\n")
+
+for event in attachment:
+    if event.type == "stdout":
+        print(event.data, end="")
+    elif event.type == "exit":
+        break
+```
+
+The attachment is a synchronous iterable of typed events. Break out of the loop at any time to stop consuming output.
+
+## Filesystem Operations
+
+Filesystem calls go directly to the sandbox data plane. You can create directories, upload content, list entries, and watch for changes.
+
+```python
+sandbox.files.make_dir("/workspace")
+sandbox.files.write("/workspace/input.txt", b"hello")
+entries = sandbox.files.list("/workspace")
+watch = sandbox.files.watch("/workspace", recursive=True)
+```
+
+## Sandbox Lifecycle
+
+A sandbox moves through four visible states: `running`, `paused`, `terminated`, and `failed`.
+
+```python
+sandbox.pause()
+sandbox.resume(deadline_seconds=600)
+sandbox.extend_deadline(900)
+sandbox.delete()
+```
+
+`pause()` snapshots the sandbox and releases the underlying node capacity. `resume()` restores the snapshot on a node and gives the sandbox a new epoch.
+
+<Note>
+  Capability tokens are scoped to a single sandbox epoch. After `resume()`, the SDK automatically replaces the token on the handle. Handles returned by `sandboxes.get()` or `sandboxes.iterate()` carry no token — call `sandbox.mint_token()` before issuing commands on them. When the data plane rejects an expired token, the SDK mints a replacement and replays the request once automatically, so long-lived handles keep working without your code refreshing anything.
+</Note>
+
+Pass an `idempotency_key` to `sandboxes.create()` so that retries return the same sandbox instead of creating a duplicate.
+
+## Port Exposure
+
+Every sandbox port is private by default, accessible only with a capability token. Make a port public only when anonymous access is required.
+
+```python
+exposure = sandbox.ports.expose(3000, "public")
+print(exposure.url)
+
+records = sandbox.ports.list()
+sandbox.ports.unexpose(3000)
+```
+
+`unexpose()` removes the exposure record and returns the port to private access.
+
+## Build and Use a Template
+
+Template builds run asynchronously on your FissionPlane installation. Start a build, wait for it to finish, then reference the template by alias.
+
+```python
+from fissionplane import BuildStep
+
+build = client.templates.build(
+    "python:3.12",
+    alias="python-tools",
+    steps=[BuildStep(command="pip install httpx")],
+)
+template = build.wait(timeout=600)
+
+sandbox = client.sandboxes.create("python-tools")
+```
+
+Stream build output with `build.logs(offset)`. Pass the returned offset into the next call to avoid re-reading lines. Use `client.templates.get_build(build_id)` to reconnect to a build started in a previous process.
+
+## Async Client
+
+`AsyncFissionPlane` mirrors the synchronous client exactly. Await each network call, and use `async for` when iterating over sandboxes.
+
+```python
+import asyncio
+
+from fissionplane import AsyncFissionPlane
+
+
+async def main() -> None:
+    client = AsyncFissionPlane()
+    sandbox = await client.sandboxes.create("base")
+    try:
+        result = await sandbox.commands.run("python", args=["-V"])
+        print(result.stdout)
+    finally:
+        await sandbox.delete()
+
+
+asyncio.run(main())
+```
+
+## List Sandboxes
+
+Read a single page of sandboxes filtered by state, metadata, or limit:
+
+```python
+from fissionplane import SandboxState
+
+page = client.sandboxes.list(state=SandboxState.RUNNING, limit=20)
+```
+
+Use `iterate()` to walk every page automatically. The SDK fetches the next page only when the previous one is exhausted and follows each cursor until the collection ends.
+
+```python
+for sandbox in client.sandboxes.iterate(state=SandboxState.RUNNING, limit=50):
+    print(sandbox.sandbox_id)
+```
+
+The async client returns an async generator you can drive with `async for`:
+
+```python
+async for sandbox in client.sandboxes.iterate(metadata={"run": "42"}):
+    print(sandbox.sandbox_id)
+```
+
+## Error Handling
+
+All SDK errors inherit from `FissionPlaneError`. HTTP errors carry `status`, `code`, `retryable`, and `request_id` when the server provides them.
+
+```python
+from fissionplane import FissionPlaneError, RateLimitError
+
+try:
+    sandbox = client.sandboxes.create("base")
+except RateLimitError as error:
+    if error.retryable:
+        print(f"retry later; request ID: {error.request_id}")
+except FissionPlaneError as error:
+    print(error.code, error)
+```
+
+The package also exports typed errors for authentication failures, authorization denials, missing resources, lifecycle conflicts, expired snapshots, command timeouts, and failed template builds.
+
+## Control Plane and Data Plane
+
+The control plane manages sandboxes, ports, tokens, and templates. The sandbox data plane runs commands, streams process I/O, and accesses files.
+
+The SDK sends your API key or OIDC token to the control plane. It sends a short-lived capability token to the sandbox data plane, stored on the sandbox handle.
+
+The data-plane agent uses port `50000` by default. Pass `agent_port` to the client constructor only when your installation uses a different port.
+
+<Note>
+  `fissionplane` is version `0.0.1`. The public API is unstable and may change without notice until the project publishes a stable release.
+</Note>

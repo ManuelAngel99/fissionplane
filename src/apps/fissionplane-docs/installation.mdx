@@ -1,0 +1,210 @@
+---
+title: "Install FissionPlane on Kubernetes with a Helm Chart"
+sidebarTitle: "Installation"
+description: "Install FissionPlane on any Kubernetes cluster using a single Helm chart. Covers prerequisites, node pool setup, and first-run validation."
+---
+
+FissionPlane ships as a single Helm chart that installs the entire platform — control plane, gateway, and node runtime — into your existing Kubernetes cluster. The chart requires no operator and makes no cluster-wide changes. Once it's running, you'll retrieve the control plane URL and API key, then point any FissionPlane SDK at them.
+
+<Warning>
+  FissionPlane is currently at version **0.0.1**. Treat the platform and all SDKs as unstable. Breaking changes may occur between releases without a deprecation period until a stable release is published.
+</Warning>
+
+## Prerequisites
+
+Confirm the following before you begin:
+
+- **Kubernetes 1.28 or later.** FissionPlane is tested against the three most recent minor releases.
+- **Helm 3.** The chart uses Helm 3 features and is not compatible with Helm 2.
+- **A node pool with KVM support.** Firecracker requires hardware virtualization. Each node in the sandbox pool must expose `/dev/kvm`. Verify this by running `ls /dev/kvm` on a candidate node.
+- **Object storage for snapshots.** Sandbox pause/resume writes memory snapshots to an S3-compatible bucket or blob store. You'll configure the storage credentials during the Helm install.
+
+### Supported platforms
+
+FissionPlane runs on any conformant Kubernetes distribution:
+
+<CardGroup cols={2}>
+  <Card title="Amazon EKS" icon="aws">
+    Use metal or compute-optimized instance types (for example, `c5.metal` or `m5.metal`) that expose nested virtualization.
+  </Card>
+  <Card title="Google GKE" icon="google">
+    Enable nested virtualization on your node pool. GKE Bare Metal and GKE on Google Cloud both work.
+  </Card>
+  <Card title="Azure AKS" icon="microsoft">
+    Use Dv3 or Ev3 series VMs with nested virtualization enabled, or AKS on bare-metal hardware.
+  </Card>
+  <Card title="k3s / bare metal" icon="server">
+    Any Linux node that exposes `/dev/kvm` works. Air-gapped networks are fully supported.
+  </Card>
+</CardGroup>
+
+### Node pool requirements
+
+Run sandbox workloads on a dedicated node pool to isolate them from control-plane components and other cluster workloads.
+
+- Each node must expose `/dev/kvm` (hardware or nested virtualization enabled at the hypervisor).
+- Apply the taint `fissionplane.dev/sandbox=true:NoSchedule` to sandbox nodes so only FissionPlane workloads are scheduled there.
+- Size the pool based on your expected concurrent sandbox count. Each Firecracker microVM reserves its own CPU and memory.
+
+```bash
+# Verify KVM is available on a node (run on the node itself)
+ls /dev/kvm
+
+# Taint your sandbox node pool (example — adjust node-pool label as needed)
+kubectl taint nodes -l fissionplane.dev/role=sandbox \
+  fissionplane.dev/sandbox=true:NoSchedule
+```
+
+## Install with Helm
+
+<Steps>
+
+  <Step title="Add the FissionPlane Helm repository">
+
+    Register the FissionPlane chart repository with Helm:
+
+    ```bash
+    helm repo add fissionplane https://charts.fissionplane.dev
+    ```
+
+    <Note>
+      The chart repository URL above is a placeholder. The Helm chart has not yet been published to a public repository. Check the [FissionPlane repository](https://github.com/ManuelAngel99/fissionplane) for the latest deployment instructions and the actual chart location when it is available.
+    </Note>
+
+  </Step>
+
+  <Step title="Update your local chart cache">
+
+    Fetch the latest chart metadata from the repository:
+
+    ```bash
+    helm repo update
+    ```
+
+  </Step>
+
+  <Step title="Install the chart">
+
+    Install FissionPlane into a dedicated namespace. Pass your chosen API key as a Helm value — you'll use this key to authenticate SDK clients.
+
+    ```bash
+    helm install fissionplane fissionplane/fissionplane \
+      --namespace fissionplane \
+      --create-namespace \
+      --set controlPlane.apiKey=<your-key>
+    ```
+
+    The chart deploys the control plane, gateway, and node-runtime components. Kubernetes will schedule sandbox workloads only on nodes that tolerate the `fissionplane.dev/sandbox=true:NoSchedule` taint.
+
+    <Tip>
+      For production installs, store your full configuration in a `values.yaml` file and pass it with `-f values.yaml` instead of using `--set` flags on the command line. This makes upgrades and version control much easier.
+    </Tip>
+
+  </Step>
+
+  <Step title="Verify the installation">
+
+    Wait for all pods to reach the `Running` state:
+
+    ```bash
+    kubectl get pods -n fissionplane
+    ```
+
+    You should see output similar to:
+
+    ```
+    NAME                                      READY   STATUS    RESTARTS   AGE
+    fissionplane-control-plane-7d9f6b-xk2p9   1/1     Running   0          2m
+    fissionplane-gateway-5c8b4d-rtn7q          1/1     Running   0          2m
+    fissionplane-node-runtime-ds-6hj2k         1/1     Running   0          2m
+    ```
+
+    If any pod is stuck in `Pending` or `CrashLoopBackOff`, check the node pool taint configuration and confirm `/dev/kvm` is accessible on your sandbox nodes.
+
+  </Step>
+
+  <Step title="Retrieve the control plane URL">
+
+    Get the external address of the FissionPlane gateway service:
+
+    ```bash
+    kubectl get service -n fissionplane
+    ```
+
+    Look for a service of type `LoadBalancer`. The `EXTERNAL-IP` column shows the address your SDK clients will use. If you're on a cluster without a load balancer controller, configure an `Ingress` or use `NodePort` instead.
+
+    ```
+    NAME                     TYPE           CLUSTER-IP     EXTERNAL-IP       PORT(S)
+    fissionplane-gateway     LoadBalancer   10.96.14.201   203.0.113.42      443:30443/TCP
+    ```
+
+    Your control plane URL is `https://<EXTERNAL-IP>` (or your DNS name if you've configured one).
+
+  </Step>
+
+</Steps>
+
+## Air-gapped installs
+
+If your cluster cannot reach the public internet, pull all required container images from an external machine first, push them to your internal registry, and then override the image registry during the Helm install.
+
+```bash
+# Override the registry during install
+helm install fissionplane fissionplane/fissionplane \
+  --namespace fissionplane \
+  --create-namespace \
+  --set controlPlane.apiKey=<your-key> \
+  --set image.registry=registry.internal.example.com
+```
+
+<Note>
+  For air-gapped installs, also mirror the chart itself using `helm pull fissionplane/fissionplane --untar` and serve it from your internal chart repository, so `helm repo update` doesn't need internet access.
+</Note>
+
+## Configure the SDK after install
+
+Once the control plane is running, export its URL and your API key so any FissionPlane SDK can connect automatically:
+
+```bash
+export FISSIONPLANE_API_URL="https://<your-control-plane-url>"
+export FISSIONPLANE_API_KEY="<your-key>"
+```
+
+Every SDK reads these two variables at startup. You can verify connectivity by creating and immediately deleting a sandbox:
+
+<CodeGroup>
+
+```ts TypeScript
+import { FissionPlane } from '@fissionplane/sdk'
+
+const client = new FissionPlane()
+const sandbox = await client.sandboxes.create({ template: 'base' })
+console.log('Connected. Sandbox ID:', sandbox.sandboxId)
+await sandbox.delete()
+```
+
+```python Python
+from fissionplane import FissionPlane
+
+client = FissionPlane()
+sandbox = client.sandboxes.create("base")
+print("Connected. Sandbox ID:", sandbox.sandbox_id)
+sandbox.delete()
+```
+
+```rust Rust
+use fissionplane::{ClientOptions, FissionPlane};
+use fissionplane::models::CreateSandboxRequest;
+
+let client = FissionPlane::new(ClientOptions::new())?;
+let sandbox = client.sandboxes().create(
+    CreateSandboxRequest { template: "base".to_owned(), ..Default::default() },
+    None,
+).await?;
+println!("Connected. Sandbox ID: {}", sandbox.info.sandbox_id);
+sandbox.delete().await?;
+```
+
+</CodeGroup>
+
+A successful run confirms that your control plane, node runtime, and SDK are all wired up correctly. Head to the [Quickstart](/quickstart) for a full end-to-end walkthrough.

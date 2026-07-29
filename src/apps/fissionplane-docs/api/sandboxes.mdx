@@ -1,0 +1,417 @@
+---
+title: "Sandbox API: Create, List, Pause, Resume, Delete"
+sidebarTitle: "Sandboxes"
+description: "Control plane endpoints for managing sandbox lifecycle. Create from a template, pause to object storage, resume, extend deadlines, and filter by metadata."
+---
+
+The sandbox endpoints on the control plane manage the full lifecycle of your Firecracker microVM sandboxes. Every sandbox starts from a template artifact, runs until its deadline expires or you explicitly act on it, and can be paused to object storage and resumed onto a fresh node. All endpoints sit under the control plane base URL: `https://<your-control-plane-url>/v1`.
+
+Authenticate every request with your organisation API key in the `X-API-Key` header, or an OIDC bearer token in `Authorization: Bearer`. See [Authentication](/api/authentication) for details.
+
+---
+
+## POST /v1/sandboxes
+
+Creates a sandbox from a template. The call is synchronous and blocks until a node has acknowledged the sandbox. On success it returns the sandbox record plus a capability token for the data plane — you can start issuing data plane requests immediately.
+
+Supply an `Idempotency-Key` header to make retries safe: a retry with the same key returns the sandbox created by the first successful request instead of creating a second one.
+
+```bash
+curl -X POST https://api.example.com/v1/sandboxes \
+  -H "X-API-Key: <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: my-unique-key-001" \
+  -d '{
+    "template": "node-tools",
+    "name": "my-sandbox",
+    "deadline_seconds": 3600,
+    "metadata": {"team": "platform", "run": "42"}
+  }'
+```
+
+**Request body**
+
+<ParamField body="template" type="string" required>
+  A template alias (e.g. `node-tools`) or an immutable artifact ID
+  (e.g. `sha256:abc...`). Aliases resolve to their current artifact at admission
+  time, so the sandbox is always built from a pinned digest.
+</ParamField>
+
+<ParamField body="name" type="string">
+  An optional display name unique within your organisation. Must match
+  `^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`. A colliding name fails with `409`
+  rather than silently creating a duplicate — useful as a natural idempotency key.
+</ParamField>
+
+<ParamField body="deadline_seconds" type="integer">
+  Requested lease length in seconds, measured from now. The installation caps
+  this at its configured maximum. Omit to use the installation default.
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  Key-value string pairs stored with the sandbox and filterable in
+  `GET /v1/sandboxes`. Use them to tag sandboxes with user IDs, job IDs, or
+  environment names.
+</ParamField>
+
+<ParamField body="egress" type="object">
+  Optional egress policy fixed at create time. You cannot widen it later.
+
+  <Expandable title="egress fields">
+    <ParamField body="egress.allow" type="string[]">
+      Hostnames or CIDR blocks the sandbox may reach. Up to 256 entries.
+    </ParamField>
+    <ParamField body="egress.deny" type="string[]">
+      Hostnames or CIDR blocks the sandbox may not reach. Deny takes
+      precedence over allow. Up to 256 entries.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Response** — `201 Created`
+
+Returns a `SandboxWithToken` object containing the sandbox record and a fresh capability token.
+
+<ResponseField name="sandbox" type="object" required>
+  The created sandbox.
+
+  <Expandable title="sandbox fields">
+    <ResponseField name="sandbox_id" type="string" required>
+      24-character lowercase-alphanumeric NanoID, also used in the sandbox's
+      data plane hostname.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      The tenant-assigned name, if one was provided.
+    </ResponseField>
+    <ResponseField name="state" type="string" required>
+      One of `running`, `paused`, `terminated`, or `failed`. A freshly created
+      sandbox is always `running`.
+    </ResponseField>
+    <ResponseField name="template_artifact_id" type="string" required>
+      The immutable `sha256:...` digest the sandbox was built from.
+    </ResponseField>
+    <ResponseField name="template" type="string">
+      The alias named in the create request, if you used one.
+    </ResponseField>
+    <ResponseField name="epoch" type="integer" required>
+      Instance generation counter. Advances on every resume. Capability tokens
+      are bound to one epoch and fail closed when it advances.
+    </ResponseField>
+    <ResponseField name="domain" type="string" required>
+      The domain suffix for this sandbox. Port `p` is reachable at
+      `https://<p>-<sandbox_id>.<domain>`.
+    </ResponseField>
+    <ResponseField name="created_at" type="string" required>
+      ISO 8601 timestamp.
+    </ResponseField>
+    <ResponseField name="deadline" type="string" required>
+      ISO 8601 timestamp when the sandbox lease expires.
+    </ResponseField>
+    <ResponseField name="metadata" type="object" required>
+      The key-value metadata supplied at create time.
+    </ResponseField>
+    <ResponseField name="resources" type="object" required>
+      <Expandable title="resources fields">
+        <ResponseField name="vcpus" type="integer" required>Number of virtual CPUs.</ResponseField>
+        <ResponseField name="mem_mib" type="integer" required>Memory in mebibytes.</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="token" type="object" required>
+  A capability token ready for data plane requests.
+
+  <Expandable title="token fields">
+    <ResponseField name="token" type="string" required>The bearer credential string.</ResponseField>
+    <ResponseField name="expires_at" type="string" required>ISO 8601 expiry timestamp.</ResponseField>
+    <ResponseField name="epoch" type="integer" required>The epoch this token was minted against.</ResponseField>
+    <ResponseField name="ports" type="integer[]">Port scope restriction, or null for full scope.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+**Error codes**: `400` malformed request · `401` unauthenticated · `403` forbidden · `404` template not found · `409` name already taken · `429` rate limited · `503` no node capacity (retryable)
+
+---
+
+## GET /v1/sandboxes
+
+Lists your organisation's sandboxes, most recently created first. All filters are optional and can be combined.
+
+```bash
+curl "https://api.example.com/v1/sandboxes?state=running&metadata=team%3Dplatform&limit=20" \
+  -H "X-API-Key: <your-api-key>"
+```
+
+**Query parameters**
+
+<ParamField query="state" type="string">
+  Filter by state. One of `running`, `paused`, `terminated`, or `failed`.
+</ParamField>
+
+<ParamField query="name" type="string">
+  Exact match on the tenant-assigned name.
+</ParamField>
+
+<ParamField query="metadata" type="string">
+  URL-encoded `key=value` pairs joined with `&`. A sandbox matches when every
+  pair matches. For example, to filter by `team=platform` and `run=42`, pass
+  `metadata=team%3Dplatform%26run%3D42`.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+  Page size. Between 1 and 100, default 20.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  Opaque cursor from a previous page's `next_cursor`. Omit for the first page.
+</ParamField>
+
+**Response** — `200 OK`
+
+<ResponseField name="items" type="Sandbox[]" required>
+  Array of sandbox objects matching the filters.
+</ResponseField>
+
+<ResponseField name="next_cursor" type="string">
+  Cursor to pass as `cursor` on the next request. Absent or null on the last page.
+</ResponseField>
+
+---
+
+## GET /v1/sandboxes/{sandboxId}
+
+Gets a single sandbox by its ID.
+
+```bash
+curl https://api.example.com/v1/sandboxes/<sandbox-id> \
+  -H "X-API-Key: <your-api-key>"
+```
+
+**Path parameters**
+
+<ParamField path="sandboxId" type="string" required>
+  The 24-character sandbox NanoID.
+</ParamField>
+
+**Response** — `200 OK`
+
+Returns the sandbox object described in the create response above.
+
+**Error codes**: `401` unauthenticated · `404` not found
+
+---
+
+## DELETE /v1/sandboxes/{sandboxId}
+
+Terminates the sandbox and releases its node capacity. If the sandbox is paused, its snapshot is also released. The sandbox record remains readable as `terminated` — it is not purged immediately.
+
+```bash
+curl -X DELETE https://api.example.com/v1/sandboxes/<sandbox-id> \
+  -H "X-API-Key: <your-api-key>"
+```
+
+**Path parameters**
+
+<ParamField path="sandboxId" type="string" required>
+  The 24-character sandbox NanoID.
+</ParamField>
+
+**Response** — `204 No Content`
+
+**Error codes**: `401` unauthenticated · `404` not found · `409` lifecycle conflict
+
+---
+
+## POST /v1/sandboxes/{sandboxId}/pause
+
+Pauses a running sandbox by taking a memory snapshot and releasing node capacity. The call returns once the node reports the VM snapshotted; the snapshot uploads to object storage in the background.
+
+The response includes a `restorable_until` field that tells you how long the snapshot remains restorable. The platform refreshes ageing snapshots by default; this timestamp reflects the worst-case window.
+
+```bash
+curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/pause \
+  -H "X-API-Key: <your-api-key>"
+```
+
+**Path parameters**
+
+<ParamField path="sandboxId" type="string" required>
+  The 24-character sandbox NanoID.
+</ParamField>
+
+**Response** — `200 OK`
+
+Returns the updated sandbox object with `state: "paused"` and a `restorable_until` timestamp.
+
+**Error codes**: `401` unauthenticated · `404` not found · `409` lifecycle conflict (e.g. already paused)
+
+---
+
+## POST /v1/sandboxes/{sandboxId}/resume
+
+Restores a paused sandbox onto a node. The resumed instance receives a **new epoch**, so all capability tokens minted against the previous instance are invalidated. This endpoint returns a fresh token alongside the sandbox.
+
+```bash
+curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/resume \
+  -H "X-API-Key: <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"deadline_seconds": 3600}'
+```
+
+**Path parameters**
+
+<ParamField path="sandboxId" type="string" required>
+  The 24-character sandbox NanoID.
+</ParamField>
+
+**Request body** (optional)
+
+<ParamField body="deadline_seconds" type="integer">
+  Lease for the resumed instance, measured from now. Omit to use the
+  installation default.
+</ParamField>
+
+**Response** — `200 OK`
+
+Returns a `SandboxWithToken` object with the updated sandbox (`state: "running"`, new `epoch`) and a fresh capability token.
+
+**Error codes**: `401` unauthenticated · `404` not found · `409` lifecycle conflict · `410` snapshot expired · `429` rate limited · `503` no capacity (retryable)
+
+---
+
+## POST /v1/sandboxes/{sandboxId}/deadline
+
+Extends the sandbox deadline to now plus `deadline_seconds`, bounded by the installation's maximum configured lease. Use this to keep a long-running sandbox alive without recreating it.
+
+```bash
+curl -X POST https://api.example.com/v1/sandboxes/<sandbox-id>/deadline \
+  -H "X-API-Key: <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"deadline_seconds": 7200}'
+```
+
+**Path parameters**
+
+<ParamField path="sandboxId" type="string" required>
+  The 24-character sandbox NanoID.
+</ParamField>
+
+**Request body**
+
+<ParamField body="deadline_seconds" type="integer" required>
+  New lease length in seconds, measured from now.
+</ParamField>
+
+**Response** — `200 OK`
+
+Returns the updated sandbox object with the new `deadline` timestamp.
+
+**Error codes**: `400` malformed request · `401` unauthenticated · `404` not found · `409` lifecycle conflict
+
+---
+
+## GET /v1/sandboxes/{sandboxId}/ports
+
+Lists the port exposure records for a sandbox. A port with no record is private by default — it is reachable with a valid capability token but does not admit anonymous traffic. Records exist to make exposure explicit, durable, and auditable.
+
+```bash
+curl https://api.example.com/v1/sandboxes/<sandbox-id>/ports \
+  -H "X-API-Key: <your-api-key>"
+```
+
+**Path parameters**
+
+<ParamField path="sandboxId" type="string" required>
+  The 24-character sandbox NanoID.
+</ParamField>
+
+**Response** — `200 OK`
+
+<ResponseField name="items" type="PortExposure[]" required>
+  The sandbox's port exposure records.
+
+  <Expandable title="PortExposure fields">
+    <ResponseField name="port" type="integer" required>The port number.</ResponseField>
+    <ResponseField name="visibility" type="string" required>
+      Either `private` (capability token required) or `public` (anonymous traffic admitted).
+    </ResponseField>
+    <ResponseField name="url" type="string" required>
+      The port's public URL: `https://<port>-<sandbox_id>.<domain>`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+**Error codes**: `401` unauthenticated · `404` not found
+
+---
+
+## PUT /v1/sandboxes/{sandboxId}/ports/{port}
+
+Creates or updates the exposure record for a specific port. Setting `visibility` to `public` admits anonymous traffic to that port — an explicit, durable, audited opt-in that defaults off. Setting it to `private` records the port without widening access. This operation is idempotent: repeating a `PUT` with the same value re-asserts the record.
+
+The reserved agent port (`50000`) cannot be given an exposure record.
+
+```bash
+curl -X PUT https://api.example.com/v1/sandboxes/<sandbox-id>/ports/3000 \
+  -H "X-API-Key: <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"visibility": "public"}'
+```
+
+**Path parameters**
+
+<ParamField path="sandboxId" type="string" required>
+  The 24-character sandbox NanoID.
+</ParamField>
+
+<ParamField path="port" type="integer" required>
+  The port number to expose. Between 1 and 65535. The reserved sandbox agent
+  port cannot be used.
+</ParamField>
+
+**Request body**
+
+<ParamField body="visibility" type="string" required>
+  Either `public` (admit anonymous traffic) or `private` (capability token
+  required, which is also the default for any port without a record).
+</ParamField>
+
+**Response** — `200 OK`
+
+<ResponseField name="port" type="integer" required>The port number.</ResponseField>
+
+<ResponseField name="visibility" type="string" required>
+  The recorded visibility: `public` or `private`.
+</ResponseField>
+
+<ResponseField name="url" type="string" required>
+  The port's URL: `https://<port>-<sandbox_id>.<domain>`.
+</ResponseField>
+
+**Error codes**: `400` malformed request or reserved port · `401` unauthenticated · `404` not found · `409` lifecycle conflict
+
+---
+
+## DELETE /v1/sandboxes/{sandboxId}/ports/{port}
+
+Removes the exposure record for a port, returning it to the default private state. Any anonymous public traffic to the port stops immediately.
+
+```bash
+curl -X DELETE https://api.example.com/v1/sandboxes/<sandbox-id>/ports/3000 \
+  -H "X-API-Key: <your-api-key>"
+```
+
+**Path parameters**
+
+<ParamField path="sandboxId" type="string" required>
+  The 24-character sandbox NanoID.
+</ParamField>
+
+<ParamField path="port" type="integer" required>
+  The port number whose record should be removed.
+</ParamField>
+
+**Response** — `204 No Content`
+
+**Error codes**: `401` unauthenticated · `404` not found · `409` lifecycle conflict

@@ -1,0 +1,229 @@
+---
+title: "Streaming API: Process I/O and File Watch via WebSocket"
+sidebarTitle: "Streaming"
+description: "Stream process stdout, stderr, and stdin over WebSocket. Watch filesystem changes with inotify events. Both streams support replay from a sequence number."
+---
+
+FissionPlane provides two WebSocket endpoints on the data plane: one for bidirectional process I/O and one for filesystem change notifications. Both use the same subprotocol negotiation, the same sequence-based replay mechanism, and the same capability-token authentication — the token travels in the WebSocket upgrade handshake, never in the URL.
+
+Both streaming endpoints share the sandbox data plane base URL:
+
+```
+https://50000-<sandbox-id>.<your-domain>
+```
+
+<Note>
+  The TypeScript SDK wraps these WebSocket endpoints in higher-level abstractions.
+  Use `process.attach()` to stream process I/O and `sandbox.files.watch()` to
+  watch the filesystem, rather than managing WebSocket connections directly. The
+  SDK handles reconnection, token refresh, and message parsing for you.
+</Note>
+
+## Subprotocol and authentication
+
+Every WebSocket upgrade request must offer the `fissionplane.v1` subprotocol and a credential subprotocol. The server selects `fissionplane.v1`; credentials never appear in the URL.
+
+Pass your capability token as a subprotocol in the upgrade request:
+
+```
+Sec-WebSocket-Protocol: fissionplane.v1, fissionplane.token.<base64url-token>
+```
+
+The gateway verifies the token from the subprotocol header during the upgrade handshake. If the token is missing, expired, or out of scope, the server rejects the upgrade with a `401` status.
+
+<Warning>
+  Streams opened with `attach()` and `files.watch()` require a valid token at
+  connection time. Unlike HTTP endpoints, the SDK cannot automatically re-mint
+  a token and replay a failed WebSocket handshake — ensure you have a fresh token
+  before opening a stream. If a token expires while a stream is open, close and
+  reconnect with a new token.
+</Warning>
+
+All messages are JSON text frames. The client ignores unknown message types, so the protocol can gain new types without breaking older clients.
+
+---
+
+## /processes/{pid}/stream
+
+Upgrades to a WebSocket for bidirectional process I/O. After connection, the server replays retained output since the requested sequence and then follows live output. Sending a disconnect does not stop the supervised process — reconnect later to resume.
+
+**Connection URL**
+
+```
+wss://50000-<sandbox-id>.<domain>/processes/<pid>/stream?after=<sequence>
+```
+
+**Path parameters**
+
+<ParamField path="pid" type="integer" required>
+  The process ID returned by `POST /processes`.
+</ParamField>
+
+**Query parameters**
+
+<ParamField query="after" type="integer">
+  Replay output after this sequence number. Pass `0` (or omit) to receive all
+  retained output from the beginning. Pass the last sequence you observed to
+  resume from where you left off after a reconnect.
+</ParamField>
+
+### Server → client messages
+
+The server sends these JSON frames:
+
+```json
+{"type": "stdout", "sequence": 1, "data": "hello\n"}
+{"type": "stderr", "sequence": 2, "data": "warning\n"}
+{"type": "exit",   "sequence": 3, "exit_code": 0}
+{"type": "gap",    "from_sequence": 1, "to_sequence": 12}
+```
+
+<ResponseField name="type" type="string" required>
+  Message type. One of `stdout`, `stderr`, `exit`, or `gap`.
+</ResponseField>
+
+<ResponseField name="sequence" type="integer">
+  Monotonically increasing output sequence number. Store the highest value you
+  have seen for use as `after` on reconnect.
+</ResponseField>
+
+<ResponseField name="data" type="string">
+  Output text. Present on `stdout` and `stderr` messages.
+</ResponseField>
+
+<ResponseField name="exit_code" type="integer">
+  Process exit code. Present on `exit` messages. Negative values indicate the
+  process was killed by a signal.
+</ResponseField>
+
+<ResponseField name="from_sequence / to_sequence" type="integer">
+  Present on `gap` messages only. The requested output starting from
+  `from_sequence` up to `to_sequence` is no longer retained. Treat the missing
+  range as lost and rescan or re-run as appropriate.
+</ResponseField>
+
+The stream closes after the `exit` message is delivered. For PTY processes, all output travels over `stdout`; there is no separate `stderr` stream.
+
+### Client → server messages
+
+Send these JSON frames to interact with the process:
+
+```json
+{"type": "input",       "data": "ls -la\n"}
+{"type": "close_stdin"}
+{"type": "resize",      "cols": 120, "rows": 40}
+{"type": "signal",      "signal": "SIGINT"}
+```
+
+<ParamField body="type" type="string" required>
+  Message type. One of `input`, `close_stdin`, `resize`, or `signal`.
+</ParamField>
+
+<ParamField body="data" type="string">
+  Bytes to write to the process's stdin. Present on `input` messages. For PTY
+  processes this includes control sequences such as arrow keys and Ctrl-C.
+</ParamField>
+
+<ParamField body="cols / rows" type="integer">
+  New terminal dimensions for a `resize` message. Valid only for PTY processes.
+  Send this whenever the user's terminal window size changes.
+</ParamField>
+
+<ParamField body="signal" type="string">
+  Signal name for a `signal` message. For example `"SIGINT"`, `"SIGTERM"`, or
+  `"SIGHUP"`.
+</ParamField>
+
+### Example: connect and read output
+
+```bash
+# Using wscat (npm install -g wscat)
+wscat \
+  --connect "wss://50000-<sandbox-id>.sandboxes.example.com/processes/42/stream?after=0" \
+  --subprotocol "fissionplane.v1" \
+  --subprotocol "fissionplane.token.<base64url-token>"
+```
+
+<Tip>
+  Store the `sequence` value from the last message you process. If your connection
+  drops, reconnect with `?after=<last-sequence>` to receive events starting from
+  where you left off, with no gaps. This makes your process attachment resilient
+  to transient network failures.
+</Tip>
+
+---
+
+## /files/watch
+
+Upgrades to a WebSocket that delivers inotify-based filesystem change events for a path inside the sandbox. Pass `recursive=true` to watch an entire directory tree. Connect with `after=<sequence>` to replay recently retained events after a reconnect.
+
+**Connection URL**
+
+```
+wss://50000-<sandbox-id>.<domain>/files/watch?path=/workspace&recursive=true&after=0
+```
+
+**Query parameters**
+
+<ParamField query="path" type="string" required>
+  The absolute path or home-relative path to watch.
+</ParamField>
+
+<ParamField query="recursive" type="boolean">
+  Watch the path and all subdirectories. Defaults to `false`.
+</ParamField>
+
+<ParamField query="after" type="integer">
+  Replay events after this sequence number. Pass the last sequence you observed
+  to resume from a reconnect without missing events.
+</ParamField>
+
+### Server → client messages
+
+```json
+{"type": "created",  "sequence": 1, "path": "/workspace/a.txt",   "kind": "file"}
+{"type": "modified", "sequence": 2, "path": "/workspace/a.txt",   "kind": "file"}
+{"type": "moved",    "sequence": 3, "path": "/workspace/b.txt",   "kind": "file", "old_path": "/workspace/a.txt"}
+{"type": "removed",  "sequence": 4, "path": "/workspace/b.txt",   "kind": "file"}
+{"type": "overflow", "sequence": 5}
+```
+
+<ResponseField name="type" type="string" required>
+  Event type. One of `created`, `modified`, `moved`, `removed`, or `overflow`.
+</ResponseField>
+
+<ResponseField name="sequence" type="integer" required>
+  Monotonically increasing event sequence number. Store this for reconnect.
+</ResponseField>
+
+<ResponseField name="path" type="string">
+  The affected path. Present on all events except `overflow`.
+</ResponseField>
+
+<ResponseField name="kind" type="string">
+  The kind of the affected path: `file`, `directory`, `symlink`, or `other`.
+</ResponseField>
+
+<ResponseField name="old_path" type="string">
+  The previous path before a rename or move. Present only on `moved` events.
+</ResponseField>
+
+An `overflow` event means the kernel inotify queue overflowed and some events were lost. When you receive one, rescan the entire watched path before relying on subsequent events — the watch continues but the in-between state is unknown.
+
+The watch ends when the WebSocket closes. A disconnect does not cancel the underlying watch kernel-side; reconnect with `after=<last-sequence>` to resume while events remain retained.
+
+### Example: watch a workspace for changes
+
+```bash
+wscat \
+  --connect "wss://50000-<sandbox-id>.sandboxes.example.com/files/watch?path=/workspace&recursive=true&after=0" \
+  --subprotocol "fissionplane.v1" \
+  --subprotocol "fissionplane.token.<base64url-token>"
+```
+
+<Tip>
+  Store the `sequence` from every event you receive. On reconnect, pass
+  `?after=<last-sequence>` to receive only events you have not yet processed.
+  The server retains a ring of recent events, so short disconnects recover
+  without data loss.
+</Tip>

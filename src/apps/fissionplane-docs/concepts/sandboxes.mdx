@@ -1,0 +1,287 @@
+---
+title: "Sandboxes: Stateful Firecracker Linux Environments"
+sidebarTitle: "Sandboxes"
+description: "Sandboxes run in Firecracker microVMs with their own kernel, filesystem, and network namespace. Create, pause, resume, and delete on demand from the SDK."
+---
+
+A sandbox is a full Linux environment running inside a Firecracker microVM. Each sandbox boots its own kernel, owns a private filesystem, and sits in an isolated network namespace. Nothing is shared with the host or with any other sandbox. You create a sandbox from a [template](/concepts/templates), run commands, read and write files, and delete it when you're done — all through the SDK or REST API. Sandboxes are the right primitive when you need an interactive, stateful workspace: AI agents, code interpreters, CI jobs, and data analysis tasks are common fits.
+
+## Lifecycle states
+
+Every sandbox moves through a well-defined set of states.
+
+| State | Meaning |
+|---|---|
+| `running` | The microVM is live on a node. Commands and filesystem operations work. |
+| `paused` | A full snapshot (memory, filesystem, device state) has been saved to object storage. The node slot is released. |
+| `terminated` | The sandbox was deleted. The microVM is gone and the record is final. |
+| `failed` | Something went wrong during creation or an operation. The sandbox cannot be recovered. |
+
+A sandbox starts in `running` immediately after creation. From there you can pause it, resume it from `paused`, or delete it from either `running` or `paused`.
+
+## Creating a sandbox
+
+Creating a sandbox requires a template — either a template alias like `"base"` or an immutable artifact ID. You can optionally set a human-readable name, a deadline in seconds (how long the sandbox may run before it is automatically terminated), and arbitrary metadata key-value pairs you can filter on later.
+
+<CodeGroup>
+
+```ts TypeScript
+import { FissionPlane } from '@fissionplane/sdk'
+
+const client = new FissionPlane()
+
+const sandbox = await client.sandboxes.create(
+  {
+    template: 'base',
+    name: 'my-agent-job',
+    deadline_seconds: 600,
+    metadata: { team: 'tools', run: '42' },
+  },
+  { idempotencyKey: 'my-agent-job-run-42' },
+)
+```
+
+```python Python
+from fissionplane import FissionPlane
+
+client = FissionPlane()
+
+sandbox = client.sandboxes.create(
+    "base",
+    name="my-agent-job",
+    deadline_seconds=600,
+    metadata={"team": "tools", "run": "42"},
+    idempotency_key="my-agent-job-run-42",
+)
+```
+
+</CodeGroup>
+
+<Note>
+Pass an `idempotencyKey` (TypeScript) or `idempotency_key` (Python) whenever your code might retry sandbox creation. The platform returns the sandbox from the first successful request for any duplicate key, so you will never accidentally create two sandboxes from a retry loop.
+</Note>
+
+## Running commands
+
+Once a sandbox is running, call `commands.run()` to execute a command and wait for it to finish. You get back the exit code, standard output, and standard error.
+
+<CodeGroup>
+
+```ts TypeScript
+const result = await sandbox.commands.run('node', {
+  args: ['--eval', "console.log('hello from FissionPlane')"],
+  timeoutSeconds: 30,
+})
+console.log(result.stdout)
+console.log(result.exit_code)
+```
+
+```python Python
+result = sandbox.commands.run(
+    "python",
+    args=["-c", "print('hello from FissionPlane')"],
+    timeout_seconds=30,
+)
+print(result.stdout)
+print(result.exit_code)
+```
+
+</CodeGroup>
+
+For long-running processes that need streaming I/O or a PTY, start a background process instead and attach to it:
+
+<CodeGroup>
+
+```ts TypeScript
+const child = await sandbox.commands.start('bash', {
+  pty: { cols: 120, rows: 40 },
+})
+const attachment = child.attach()
+attachment.sendInput('pwd\n')
+
+for await (const event of attachment) {
+  if (event.type === 'stdout') console.log(event.data)
+  if (event.type === 'exit') break
+}
+```
+
+```python Python
+from fissionplane import PtySize
+
+process = sandbox.commands.start("bash", pty=PtySize(cols=120, rows=40))
+attachment = process.attach()
+attachment.send_input("pwd\n")
+
+for event in attachment:
+    if event.type == "stdout":
+        print(event.data, end="")
+    elif event.type == "exit":
+        break
+```
+
+</CodeGroup>
+
+## Working with files
+
+Filesystem operations go directly to the sandbox data plane — they do not route through the control plane.
+
+<CodeGroup>
+
+```ts TypeScript
+await sandbox.files.makeDir('/workspace')
+await sandbox.files.write(
+  '/workspace/input.txt',
+  new TextEncoder().encode('hello'),
+)
+const entries = await sandbox.files.list('/workspace')
+const watch = sandbox.files.watch('/workspace', { recursive: true })
+```
+
+```python Python
+sandbox.files.make_dir("/workspace")
+sandbox.files.write("/workspace/input.txt", b"hello")
+entries = sandbox.files.list("/workspace")
+watch = sandbox.files.watch("/workspace", recursive=True)
+```
+
+</CodeGroup>
+
+## Pausing and resuming
+
+Pausing saves a complete snapshot — memory, filesystem, and all running processes — to object storage, then releases the compute slot on the node. Resume restores everything from that snapshot, exactly where it left off.
+
+<CodeGroup>
+
+```ts TypeScript
+// Pause — snapshot saved, node slot released
+await sandbox.pause()
+
+// Resume — snapshot restored, processes continue
+await sandbox.resume({ deadlineSeconds: 600 })
+```
+
+```python Python
+# Pause — snapshot saved, node slot released
+sandbox.pause()
+
+# Resume — snapshot restored, processes continue
+sandbox.resume(deadline_seconds=600)
+```
+
+</CodeGroup>
+
+<Note>
+Each resume creates a **new epoch**. Capability tokens are scoped to an epoch, so any token you held before pausing is no longer valid after a resume. The SDK automatically obtains a fresh token on the sandbox handle after `resume()`. See [Security](/concepts/security) for the full token model.
+</Note>
+
+## Sandbox deadlines
+
+A deadline is a maximum lifetime enforced from outside the guest. When the deadline expires, the platform terminates the sandbox — even if a process is still running inside. You set the initial deadline at creation time with `deadline_seconds`. You can extend an active sandbox's deadline at any time:
+
+<CodeGroup>
+
+```ts TypeScript
+// Extend the deadline to 900 seconds from now
+await sandbox.extendDeadline(900)
+```
+
+```python Python
+# Extend the deadline to 900 seconds from now
+sandbox.extend_deadline(900)
+```
+
+</CodeGroup>
+
+Because the deadline is enforced outside the guest, a hung or hostile process cannot prevent the sandbox from being cleaned up.
+
+## Deleting a sandbox
+
+Deleting a sandbox tears down the microVM immediately, releases all compute and network resources, and marks the record as `terminated`. Delete works whether the sandbox is `running` or `paused`.
+
+<CodeGroup>
+
+```ts TypeScript
+await sandbox.delete()
+```
+
+```python Python
+sandbox.delete()
+```
+
+</CodeGroup>
+
+## Listing and filtering sandboxes
+
+Use `list()` to read one page of sandboxes. Filter by `state`, by `name`, or by any metadata key-value pairs you attached at creation.
+
+<CodeGroup>
+
+```ts TypeScript
+// One page — running sandboxes owned by the tools team
+const page = await client.sandboxes.list({
+  state: 'running',
+  metadata: { team: 'tools' },
+  limit: 20,
+})
+
+// All matching sandboxes, paginated automatically
+for await (const sandbox of client.sandboxes.iterate({ state: 'running' })) {
+  console.log(sandbox.sandboxId)
+}
+```
+
+```python Python
+from fissionplane import SandboxState
+
+# One page — running sandboxes owned by the tools team
+page = client.sandboxes.list(
+    state=SandboxState.RUNNING,
+    metadata={"team": "tools"},
+    limit=20,
+)
+
+# All matching sandboxes, paginated automatically
+for sandbox in client.sandboxes.iterate(state=SandboxState.RUNNING, limit=50):
+    print(sandbox.sandbox_id)
+```
+
+</CodeGroup>
+
+`iterate()` follows each page's cursor automatically and fetches a new page only when the previous one is exhausted. Break out of the loop at any time to stop.
+
+## Full lifecycle example
+
+<Steps>
+  <Step title="Create the sandbox">
+    Pass a template alias and a deadline. Use an idempotency key if your code might retry.
+  </Step>
+  <Step title="Run your workload">
+    Execute commands, read and write files, or start a streaming process.
+  </Step>
+  <Step title="Pause if you need to preserve state">
+    Pause to object storage if the sandbox will be idle for a while. Resume it later with its processes intact.
+  </Step>
+  <Step title="Delete when finished">
+    Call `delete()` to release all resources. A `try/finally` block keeps cleanup reliable.
+  </Step>
+</Steps>
+
+```ts TypeScript
+import { FissionPlane } from '@fissionplane/sdk'
+
+const client = new FissionPlane()
+const sandbox = await client.sandboxes.create(
+  { template: 'base', name: 'example-job', deadline_seconds: 600 },
+  { idempotencyKey: 'example-job-1' },
+)
+
+try {
+  const result = await sandbox.commands.run('node', {
+    args: ['--eval', "console.log('hello from FissionPlane')"],
+    timeoutSeconds: 30,
+  })
+  console.log(result.stdout)
+} finally {
+  await sandbox.delete()
+}
+```

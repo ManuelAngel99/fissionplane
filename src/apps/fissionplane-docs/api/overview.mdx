@@ -1,0 +1,93 @@
+---
+title: "FissionPlane REST API Overview and Base URLs"
+sidebarTitle: "Overview"
+description: "FissionPlane exposes two HTTP APIs: the control plane API for sandbox lifecycle and templates, and the data plane API for commands and file operations per sandbox."
+---
+
+FissionPlane exposes two separate HTTP APIs that together cover the full platform surface. The **control plane API** manages the lifecycle of sandboxes, templates, and tokens — it is the authoritative record of what exists and what state it is in. The **data plane API** lives on each sandbox itself and handles command execution, process management, and filesystem access. Because these APIs run on different hosts with different credentials, you interact with them differently depending on what you are doing.
+
+## Base URLs
+
+**Control plane** — all lifecycle and management operations use a single base URL rooted at your installation's control plane domain:
+
+```
+https://<your-control-plane-url>/v1
+```
+
+Every control plane endpoint is versioned under the `/v1` prefix. Examples include `POST /v1/sandboxes` to create a sandbox and `GET /v1/templates` to list templates.
+
+**Data plane** — each sandbox exposes its own management surface on the reserved agent port (`50000`). The URL is derived from the sandbox ID and your domain:
+
+```
+https://50000-<sandbox-id>.<your-domain>
+```
+
+The data plane is available whenever the sandbox is running, even when the control plane is temporarily unavailable. Compute keeps serving traffic independently of the management API.
+
+## Authentication
+
+The two APIs use different credential types and different headers:
+
+- **Control plane**: pass your organisation API key in the `X-API-Key` header, or an OIDC bearer token in the `Authorization: Bearer` header.
+- **Data plane**: pass a short-lived capability token in the `X-Sandbox-Token` header. Capability tokens are scoped to one sandbox epoch and are minted by the control plane via `POST /v1/sandboxes/{sandboxId}/token`. The SDK handles minting and refreshing these tokens automatically.
+
+See the [Authentication](/api/authentication) page for the full details.
+
+## Content type
+
+Both APIs use `application/json` for request bodies and response documents. Set `Content-Type: application/json` on every request that includes a body. File upload and download endpoints on the data plane use `application/octet-stream` instead.
+
+Every response includes an `X-Request-Id` header. If you supply a well-formed `X-Request-Id` on the request, the API echoes it back; otherwise it generates one. Keep this ID when contacting support.
+
+## Versioning
+
+All control plane endpoints are prefixed with `/v1`. Backward-compatible additions — new optional fields and new endpoints — can appear in a minor release without a version bump. Breaking changes advance the path prefix.
+
+The data plane API has no version prefix; it is versioned implicitly by the sandbox agent bundled with each FissionPlane release.
+
+## Rate limiting
+
+When you exceed a rate limit or a quota, the API returns `429 Too Many Requests`. The response body uses the standard error format and the `code` field distinguishes which limit was hit. Retry after the delay indicated by the `Retry-After` header if present.
+
+## Error format
+
+Every non-2xx response body follows the same JSON structure:
+
+```json
+{
+  "code": "lifecycle_conflict",
+  "message": "The sandbox is already paused and cannot be paused again.",
+  "retryable": false,
+  "request_id": "01j9abcdef1234567890abcd"
+}
+```
+
+<ResponseField name="code" type="string" required>
+  Machine-readable error cause, stable across releases. Common values include
+  `invalid_request`, `unauthenticated`, `forbidden`, `not_found`, `name_taken`,
+  `lifecycle_conflict`, `quota_exceeded`, `rate_limited`, `snapshot_expired`,
+  and `no_capacity`.
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Human-readable description of what went wrong. Never contains credentials or
+  sensitive data.
+</ResponseField>
+
+<ResponseField name="retryable" type="boolean">
+  Whether issuing the identical request again would plausibly succeed. Use this
+  field to decide whether to retry rather than hard-coding status codes.
+</ResponseField>
+
+<ResponseField name="request_id" type="string">
+  The request identifier, for correlating with support and audit. Include it
+  in any support request.
+</ResponseField>
+
+## OpenAPI specifications
+
+The full machine-readable contracts are available in the FissionPlane source repository:
+
+- [Control-plane OpenAPI spec](https://github.com/ManuelAngel99/fissionplane/blob/main/src/contracts/openapi.yaml) — sandboxes, templates, tokens, ports
+- [Data-plane OpenAPI spec](https://github.com/ManuelAngel99/fissionplane/blob/main/src/contracts/dataplane.yaml) — commands, processes, files
+- [Data-plane streaming protocol](https://github.com/ManuelAngel99/fissionplane/blob/main/src/contracts/dataplane-streaming.md) — WebSocket message formats

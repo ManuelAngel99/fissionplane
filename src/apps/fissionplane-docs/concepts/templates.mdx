@@ -1,0 +1,245 @@
+---
+title: "Templates: Immutable Pre-Booted Sandbox Environments"
+sidebarTitle: "Templates"
+description: "Templates are immutable pre-booted artifacts from OCI images. Every sandbox starts from a template. Build them once and create sandboxes in milliseconds."
+---
+
+A template is an immutable artifact that captures a fully-booted Linux environment. You provide an OCI image and an optional set of build steps — FissionPlane boots it once, applies your steps, takes a snapshot, and stores the result. Every sandbox you create afterwards starts from that snapshot rather than booting from scratch, which is what makes sandbox creation take milliseconds instead of seconds. Because templates are immutable, you can rely on every sandbox from a given template being identical at the moment it starts.
+
+## Why templates exist
+
+Cold-booting a Linux kernel, initializing the userspace, and waiting for a process supervisor to be ready takes time. Templates eliminate that cost. The boot already happened at build time; creating a sandbox is a restore, not a boot. At scale — especially when an AI agent creates dozens of sandboxes in rapid succession — the difference between a multi-second boot and a sub-second restore is the difference between a responsive experience and a slow one.
+
+Templates also let you bake in expensive one-time setup. If your workload always needs a specific version of a compiler, a set of Python packages, or a pre-warmed model file, you can install those at build time and never pay for them at sandbox-creation time.
+
+## Building a template
+
+A template build is asynchronous. You provide an OCI image name and, optionally, a set of build steps to run inside the booted image before the snapshot is taken. You can also give the template a human-readable alias so you can reference it by name rather than by an opaque artifact ID.
+
+<CodeGroup>
+
+```ts TypeScript
+import { FissionPlane } from '@fissionplane/sdk'
+
+const client = new FissionPlane()
+
+const build = await client.templates.build({
+  image: 'node:22',
+  alias: 'node-tools',
+  steps: [
+    { command: 'npm install --global pnpm' },
+    { command: 'node --version' },
+  ],
+})
+```
+
+```python Python
+from fissionplane import FissionPlane, BuildStep
+
+client = FissionPlane()
+
+build = client.templates.build(
+    "python:3.12",
+    alias="python-tools",
+    steps=[
+        BuildStep(command="pip install httpx numpy"),
+        BuildStep(command="python --version"),
+    ],
+)
+```
+
+</CodeGroup>
+
+## Waiting for the build to finish
+
+`build()` returns immediately with a build handle. Use `wait()` to block until the build succeeds or fails, or poll the build status yourself and stream build logs incrementally.
+
+<CodeGroup>
+
+```ts TypeScript
+// Block until the build completes (10-minute timeout)
+const template = await build.wait({ timeoutMs: 10 * 60 * 1000 })
+console.log('Template ready:', template.templateId)
+```
+
+```python Python
+# Block until the build completes (10-minute timeout)
+template = build.wait(timeout=600)
+print("Template ready:", template.template_id)
+```
+
+</CodeGroup>
+
+To stream build output as it arrives, call `build.logs()` with an offset and pass the returned `nextOffset` to the following call:
+
+<CodeGroup>
+
+```ts TypeScript
+let offset = 0
+while (true) {
+  const chunk = await build.logs(offset)
+  process.stdout.write(chunk.data)
+  if (chunk.done) break
+  offset = chunk.nextOffset
+}
+```
+
+```python Python
+offset = 0
+while True:
+    chunk = build.logs(offset)
+    print(chunk.data, end="")
+    if chunk.done:
+        break
+    offset = chunk.next_offset
+```
+
+</CodeGroup>
+
+If you lose the build handle — for example, because the process that started the build restarted — reconnect by build ID:
+
+<CodeGroup>
+
+```ts TypeScript
+const build = await client.templates.getBuild(buildId)
+const template = await build.wait({ timeoutMs: 10 * 60 * 1000 })
+```
+
+```python Python
+build = client.templates.get_build(build_id)
+template = build.wait(timeout=600)
+```
+
+</CodeGroup>
+
+## Template aliases
+
+An alias is a mutable, human-readable name that points to a specific template artifact. You set an alias when you call `build()`. Later, when you create a sandbox, you pass the alias name and FissionPlane resolves it to the correct immutable artifact ID at the moment the sandbox is admitted.
+
+This means you can update what `"python-tools"` points to by building a new template with the same alias — without changing any code that creates sandboxes from it. Old artifact IDs remain valid; they are never overwritten.
+
+<Tip>
+Use aliases in development and CI pipelines. Pin to a specific artifact ID in production deployments where you need reproducibility across a long window of time.
+</Tip>
+
+## Creating a sandbox from a template
+
+Pass the alias or artifact ID as the `template` argument when creating a sandbox. That's the only required field.
+
+<CodeGroup>
+
+```ts TypeScript
+// By alias
+const sandbox = await client.sandboxes.create({ template: 'node-tools' })
+
+// By artifact ID
+const sandbox = await client.sandboxes.create({ template: 'tpl_a1b2c3d4' })
+```
+
+```python Python
+# By alias
+sandbox = client.sandboxes.create("python-tools")
+
+# By artifact ID
+sandbox = client.sandboxes.create("tpl_a1b2c3d4")
+```
+
+</CodeGroup>
+
+## Managing templates
+
+List, retrieve, and delete templates through the SDK.
+
+<CodeGroup>
+
+```ts TypeScript
+// List all templates in your organization
+const page = await client.templates.list()
+
+// Get one template by ID
+const template = await client.templates.get('tpl_a1b2c3d4')
+
+// Delete a template
+await client.templates.delete('tpl_a1b2c3d4')
+```
+
+```python Python
+# List all templates in your organization
+page = client.templates.list()
+
+# Get one template by ID
+template = client.templates.get("tpl_a1b2c3d4")
+
+# Delete a template
+client.templates.delete("tpl_a1b2c3d4")
+```
+
+</CodeGroup>
+
+<Note>
+Deleting a template does not affect sandboxes already created from it. Those sandboxes continue to run normally because they hold their own copy of the filesystem state.
+</Note>
+
+## End-to-end: build and use a template
+
+<Steps>
+  <Step title="Build the template">
+    Pass an OCI image, an alias, and any setup steps you need baked in.
+  </Step>
+  <Step title="Wait for the build">
+    Poll status or block with `wait()`. Stream build logs to monitor progress.
+  </Step>
+  <Step title="Create sandboxes from it">
+    Reference the alias when creating sandboxes. The snapshot boots in milliseconds.
+  </Step>
+</Steps>
+
+<CodeGroup>
+
+```ts TypeScript
+import { FissionPlane } from '@fissionplane/sdk'
+
+const client = new FissionPlane()
+
+// 1. Build
+const build = await client.templates.build({
+  image: 'node:22',
+  alias: 'node-tools',
+  steps: [{ command: 'npm install --global pnpm' }],
+})
+
+// 2. Wait
+const template = await build.wait({ timeoutMs: 10 * 60 * 1000 })
+console.log('Built:', template.templateId)
+
+// 3. Create sandboxes — fast from here on
+const sandbox = await client.sandboxes.create({ template: 'node-tools' })
+const result = await sandbox.commands.run('pnpm', { args: ['--version'] })
+console.log(result.stdout)
+await sandbox.delete()
+```
+
+```python Python
+from fissionplane import FissionPlane, BuildStep
+
+client = FissionPlane()
+
+# 1. Build
+build = client.templates.build(
+    "python:3.12",
+    alias="python-tools",
+    steps=[BuildStep(command="pip install httpx")],
+)
+
+# 2. Wait
+template = build.wait(timeout=600)
+print("Built:", template.template_id)
+
+# 3. Create sandboxes — fast from here on
+sandbox = client.sandboxes.create("python-tools")
+result = sandbox.commands.run("python", args=["-c", "import httpx; print(httpx.__version__)"])
+print(result.stdout)
+sandbox.delete()
+```
+
+</CodeGroup>

@@ -1,0 +1,247 @@
+---
+title: "Files API: Read, Write, and Manage Sandbox Files"
+sidebarTitle: "Files"
+description: "Data plane endpoints for listing directories, reading and writing files, uploading and downloading, and managing the sandbox filesystem."
+---
+
+The files API runs on the sandbox data plane and gives you direct access to the filesystem inside a Firecracker microVM. You can list directories, inspect file metadata, read and write file contents, move paths, and remove files — all without running a shell command.
+
+All file endpoints use the sandbox-specific data plane base URL:
+
+```
+https://50000-<sandbox-id>.<your-domain>
+```
+
+Authenticate every request with a capability token in the `X-Sandbox-Token` header. See [Tokens](/api/tokens) to learn how to mint one.
+
+Paths can be absolute (e.g. `/workspace/app.js`) or relative to the default user's home directory. The `path` parameter is required on every endpoint that operates on a specific path.
+
+---
+
+## GET /files
+
+Lists the contents of a directory. Returns metadata for each entry but not the file contents themselves — use `GET /files/content` to download a file.
+
+```bash
+curl "https://50000-<sandbox-id>.sandboxes.example.com/files?path=/workspace" \
+  -H "X-Sandbox-Token: <capability-token>"
+```
+
+**Query parameters**
+
+<ParamField query="path" type="string" required>
+  Absolute path or a path relative to the default user's home directory.
+</ParamField>
+
+**Response** — `200 OK`
+
+<ResponseField name="items" type="FileInfo[]" required>
+  Directory entries.
+
+  <Expandable title="FileInfo fields">
+    <ResponseField name="path" type="string" required>Full absolute path.</ResponseField>
+    <ResponseField name="name" type="string" required>Filename component only.</ResponseField>
+    <ResponseField name="kind" type="string" required>
+      One of `file`, `directory`, `symlink`, or `other`.
+    </ResponseField>
+    <ResponseField name="size" type="integer" required>
+      Size in bytes. Zero for directories.
+    </ResponseField>
+    <ResponseField name="mode" type="string" required>
+      Unix permission bits in octal, for example `0644`.
+    </ResponseField>
+    <ResponseField name="modified_at" type="string" required>
+      ISO 8601 last-modified timestamp.
+    </ResponseField>
+    <ResponseField name="target" type="string">
+      Symlink target path. Present only when `kind` is `symlink`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+**Error codes**: `400` malformed request · `401` unauthenticated · `404` path not found
+
+---
+
+## GET /files/stat
+
+Reads the metadata of a single file or directory without returning its contents.
+
+```bash
+curl "https://50000-<sandbox-id>.sandboxes.example.com/files/stat?path=/workspace/app.js" \
+  -H "X-Sandbox-Token: <capability-token>"
+```
+
+**Query parameters**
+
+<ParamField query="path" type="string" required>
+  Absolute path or relative to the default user's home.
+</ParamField>
+
+**Response** — `200 OK`
+
+Returns a single `FileInfo` object with the same fields as the entries in `GET /files`: `path`, `name`, `kind`, `size`, `mode`, `modified_at`, and optionally `target`.
+
+**Error codes**: `400` malformed request · `401` unauthenticated · `404` path not found
+
+---
+
+## POST /files/directories
+
+Creates a directory. By default this also creates all intermediate parent directories (`mkdir -p` semantics). The call is idempotent: if the directory already exists, it returns `204` without error.
+
+```bash
+curl -X POST https://50000-<sandbox-id>.sandboxes.example.com/files/directories \
+  -H "X-Sandbox-Token: <capability-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/workspace/data/output", "mode": "0755"}'
+```
+
+**Request body**
+
+<ParamField body="path" type="string" required>
+  The directory path to create.
+</ParamField>
+
+<ParamField body="parents" type="boolean">
+  Create intermediate parent directories as needed. Defaults to `true`.
+</ParamField>
+
+<ParamField body="mode" type="string">
+  Unix permission bits in octal, for example `0755`. Applied to the created
+  directory.
+</ParamField>
+
+**Response** — `204 No Content`
+
+**Error codes**: `400` malformed request · `401` unauthenticated
+
+---
+
+## GET /files/content
+
+Downloads the raw bytes of a file. The response body is the file content with `Content-Type: application/octet-stream`. Response headers include `X-File-Mode` (permission bits) and `X-File-Modified-At` (ISO 8601 last-modified time).
+
+```bash
+curl "https://50000-<sandbox-id>.sandboxes.example.com/files/content?path=/workspace/output.json" \
+  -H "X-Sandbox-Token: <capability-token>" \
+  -o output.json
+```
+
+**Query parameters**
+
+<ParamField query="path" type="string" required>
+  Absolute path or relative to the default user's home.
+</ParamField>
+
+**Response** — `200 OK`
+
+Raw file bytes with `Content-Type: application/octet-stream`.
+
+**Response headers**
+
+| Header | Description |
+|--------|-------------|
+| `X-File-Mode` | Unix permission bits in octal (e.g. `0644`). |
+| `X-File-Modified-At` | ISO 8601 last-modified timestamp. |
+
+**Error codes**: `400` malformed request · `401` unauthenticated · `404` file not found
+
+---
+
+## PUT /files/content
+
+Uploads a file to the given path. The file is written atomically — the old contents are not visible to other processes during the write. If the path does not exist it is created; if it does, it is overwritten.
+
+```bash
+curl -X PUT "https://50000-<sandbox-id>.sandboxes.example.com/files/content?path=/workspace/app.js&mode=0644" \
+  -H "X-Sandbox-Token: <capability-token>" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @app.js
+```
+
+**Query parameters**
+
+<ParamField query="path" type="string" required>
+  Destination path inside the sandbox.
+</ParamField>
+
+<ParamField query="mode" type="string">
+  Unix permission bits in octal, for example `0644`. Applied to the written
+  file. Omit to use the default mode.
+</ParamField>
+
+**Request body**
+
+Raw file bytes with `Content-Type: application/octet-stream`.
+
+**Response** — `204 No Content`
+
+**Error codes**: `400` malformed request · `401` unauthenticated
+
+---
+
+## POST /files/move
+
+Moves or renames a file or directory. The source must exist. By default the destination must not exist; set `overwrite` to `true` to replace it.
+
+```bash
+curl -X POST https://50000-<sandbox-id>.sandboxes.example.com/files/move \
+  -H "X-Sandbox-Token: <capability-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "/workspace/draft.txt",
+    "destination": "/workspace/final.txt",
+    "overwrite": false
+  }'
+```
+
+**Request body**
+
+<ParamField body="source" type="string" required>
+  The path to move from.
+</ParamField>
+
+<ParamField body="destination" type="string" required>
+  The path to move to.
+</ParamField>
+
+<ParamField body="overwrite" type="boolean">
+  Replace the destination if it already exists. Defaults to `false`. When
+  `false` and the destination exists, the call returns `409 Conflict`.
+</ParamField>
+
+**Response** — `204 No Content`
+
+**Error codes**: `400` malformed request · `401` unauthenticated · `404` source not found · `409` destination exists and `overwrite` is false
+
+---
+
+## DELETE /files
+
+Removes a file or directory. Pass `recursive=true` to remove a non-empty directory and all its contents.
+
+```bash
+# Remove a single file
+curl -X DELETE "https://50000-<sandbox-id>.sandboxes.example.com/files?path=/workspace/temp.txt" \
+  -H "X-Sandbox-Token: <capability-token>"
+
+# Remove a directory tree
+curl -X DELETE "https://50000-<sandbox-id>.sandboxes.example.com/files?path=/workspace/cache&recursive=true" \
+  -H "X-Sandbox-Token: <capability-token>"
+```
+
+**Query parameters**
+
+<ParamField query="path" type="string" required>
+  Absolute path or relative to the default user's home.
+</ParamField>
+
+<ParamField query="recursive" type="boolean">
+  Remove a directory and all its contents. Defaults to `false`. When `false`
+  and the path is a non-empty directory, the call returns `400`.
+</ParamField>
+
+**Response** — `204 No Content`
+
+**Error codes**: `400` malformed request or non-empty directory without `recursive=true` · `401` unauthenticated · `404` path not found

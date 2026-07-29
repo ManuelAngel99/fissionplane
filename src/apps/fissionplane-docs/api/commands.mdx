@@ -1,0 +1,334 @@
+---
+title: "Commands API: Run Processes in Sandbox Data Plane"
+sidebarTitle: "Commands"
+description: "Data plane endpoints for running commands to completion, starting background processes, listing supervised processes, and signaling or killing processes."
+---
+
+The commands API runs on the sandbox data plane and lets you execute processes directly inside a Firecracker microVM. It offers two execution modes: run-to-completion for short commands where you want the output returned in a single response, and background processes for long-running workloads where you need to stream output or send input interactively.
+
+All commands endpoints use the sandbox-specific data plane base URL:
+
+```
+https://50000-<sandbox-id>.<your-domain>
+```
+
+Authenticate every request with a capability token in the `X-Sandbox-Token` header. See [Tokens](/api/tokens) to learn how to mint one.
+
+<Note>
+  The data plane is available whenever the sandbox is running, even if the control
+  plane is temporarily unavailable. Capability tokens carry all the information the
+  gateway needs to verify the request without phoning home.
+</Note>
+
+---
+
+## POST /commands
+
+Runs a command inside the sandbox and blocks until the command exits or the timeout elapses. Output is captured and returned in a single JSON document. If the output exceeds the capture limit, the `truncated` flag is set to true.
+
+Use this endpoint for short, discrete commands. For commands with unbounded output, interactive sessions, or PTY requirements, use `POST /processes` and the [streaming API](/api/streaming) instead.
+
+```bash
+curl -X POST https://50000-<sandbox-id>.sandboxes.example.com/commands \
+  -H "X-Sandbox-Token: <capability-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "node",
+    "args": ["--eval", "console.log(process.version)"],
+    "timeout_seconds": 30
+  }'
+```
+
+**Request body**
+
+<ParamField body="command" type="string" required>
+  The program to run. Use an absolute path or a name resolvable on `$PATH` inside
+  the sandbox.
+</ParamField>
+
+<ParamField body="args" type="string[]">
+  Arguments passed to the command. Up to 256 entries.
+</ParamField>
+
+<ParamField body="cwd" type="string">
+  Working directory for the command. Omit to use the default user's home
+  directory.
+</ParamField>
+
+<ParamField body="env" type="object">
+  Additional environment variables set for this command only. Keys and values
+  are strings. These are merged with the process environment; they do not
+  replace it.
+</ParamField>
+
+<ParamField body="stdin" type="string">
+  Bytes written to the command's stdin before it is closed. Use this for
+  commands that read from stdin without being interactive.
+</ParamField>
+
+<ParamField body="timeout_seconds" type="integer">
+  Kill the command if it has not exited after this many seconds. Omit to use
+  the agent's default timeout.
+</ParamField>
+
+**Response** — `200 OK`
+
+The command ran. Check `exit_code` to determine success or failure.
+
+```json
+{
+  "exit_code": 0,
+  "stdout": "v22.0.0\n",
+  "stderr": "",
+  "truncated": false
+}
+```
+
+<ResponseField name="exit_code" type="integer" required>
+  The command's exit code. Zero means success. A negative value means the
+  command was killed by a signal.
+</ResponseField>
+
+<ResponseField name="stdout" type="string" required>
+  Standard output captured from the command.
+</ResponseField>
+
+<ResponseField name="stderr" type="string" required>
+  Standard error captured from the command.
+</ResponseField>
+
+<ResponseField name="truncated" type="boolean">
+  True when the output exceeded the agent's capture limit. The captured portion
+  is still returned. If you need the full output, use the streaming API instead.
+</ResponseField>
+
+**Error codes**: `400` malformed request · `401` unauthenticated or expired token · `408` timeout elapsed (command was killed) · `429` per-sandbox concurrent-connection cap reached
+
+---
+
+## POST /processes
+
+Starts a supervised background process and returns as soon as it has been spawned. The process continues running after your HTTP request completes. Attach to its WebSocket stream for live output, stdin, signals, and PTY resize events.
+
+```bash
+curl -X POST https://50000-<sandbox-id>.sandboxes.example.com/processes \
+  -H "X-Sandbox-Token: <capability-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "bash",
+    "pty": {"cols": 220, "rows": 50}
+  }'
+```
+
+**Request body**
+
+<ParamField body="command" type="string" required>
+  The program to run.
+</ParamField>
+
+<ParamField body="args" type="string[]">
+  Arguments passed to the command. Up to 256 entries.
+</ParamField>
+
+<ParamField body="cwd" type="string">
+  Working directory. Omit to use the default user's home directory.
+</ParamField>
+
+<ParamField body="env" type="object">
+  Environment variables set for this process only.
+</ParamField>
+
+<ParamField body="pty" type="object">
+  Allocate a pseudo-terminal for this process. Required for interactive
+  programs such as shells, editors, and TUI applications.
+
+  <Expandable title="pty fields">
+    <ParamField body="pty.cols" type="integer" required>
+      Terminal width in columns. Between 1 and 65535.
+    </ParamField>
+    <ParamField body="pty.rows" type="integer" required>
+      Terminal height in rows. Between 1 and 65535.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Response** — `201 Created`
+
+<ResponseField name="pid" type="integer" required>
+  The process ID inside the sandbox. Use this to stream output, read logs,
+  and send signals.
+</ResponseField>
+
+<ResponseField name="command" type="string" required>
+  The command as started.
+</ResponseField>
+
+<ResponseField name="started_at" type="string" required>
+  ISO 8601 timestamp when the process was spawned.
+</ResponseField>
+
+<ResponseField name="running" type="boolean" required>
+  True if the process is still running at the time of this response.
+</ResponseField>
+
+<ResponseField name="pty" type="boolean" required>
+  True if a pseudo-terminal was allocated.
+</ResponseField>
+
+**Error codes**: `400` malformed request · `401` unauthenticated · `429` concurrent-connection cap reached
+
+---
+
+## GET /processes
+
+Lists the processes the agent supervises inside the sandbox. This includes running processes and recently exited ones that the agent has not yet reaped.
+
+```bash
+curl https://50000-<sandbox-id>.sandboxes.example.com/processes \
+  -H "X-Sandbox-Token: <capability-token>"
+```
+
+**Response** — `200 OK`
+
+<ResponseField name="items" type="Process[]" required>
+  Array of process objects. Each has the same fields as the `POST /processes`
+  response: `pid`, `command`, `started_at`, `running`, `pty`, `exit_code`
+  (when exited), and `exited_at` (when exited).
+</ResponseField>
+
+**Error codes**: `401` unauthenticated
+
+---
+
+## GET /processes/{pid}
+
+Gets the current state of a single supervised process.
+
+```bash
+curl https://50000-<sandbox-id>.sandboxes.example.com/processes/42 \
+  -H "X-Sandbox-Token: <capability-token>"
+```
+
+**Path parameters**
+
+<ParamField path="pid" type="integer" required>
+  The process ID as returned by `POST /processes`.
+</ParamField>
+
+**Response** — `200 OK`
+
+<ResponseField name="pid" type="integer" required>Process ID.</ResponseField>
+
+<ResponseField name="command" type="string" required>The command that was started.</ResponseField>
+
+<ResponseField name="started_at" type="string" required>ISO 8601 start timestamp.</ResponseField>
+
+<ResponseField name="running" type="boolean" required>True if the process is still running.</ResponseField>
+
+<ResponseField name="pty" type="boolean" required>True if a PTY was allocated.</ResponseField>
+
+<ResponseField name="exit_code" type="integer">
+  Exit code, present when the process has exited. Negative values indicate the
+  process was killed by a signal.
+</ResponseField>
+
+<ResponseField name="exited_at" type="string">
+  ISO 8601 timestamp when the process exited.
+</ResponseField>
+
+**Error codes**: `401` unauthenticated · `404` process not found
+
+---
+
+## DELETE /processes/{pid}
+
+Sends a Unix signal to a supervised process. The default is `SIGTERM`. Use `SIGKILL` when the process does not respond to `SIGTERM`.
+
+```bash
+# Graceful termination
+curl -X DELETE "https://50000-<sandbox-id>.sandboxes.example.com/processes/42?signal=SIGTERM" \
+  -H "X-Sandbox-Token: <capability-token>"
+
+# Force kill
+curl -X DELETE "https://50000-<sandbox-id>.sandboxes.example.com/processes/42?signal=SIGKILL" \
+  -H "X-Sandbox-Token: <capability-token>"
+```
+
+**Path parameters**
+
+<ParamField path="pid" type="integer" required>
+  The process ID.
+</ParamField>
+
+**Query parameters**
+
+<ParamField query="signal" type="string">
+  The signal to deliver. One of `SIGTERM` (default), `SIGKILL`, `SIGINT`, or
+  `SIGHUP`.
+</ParamField>
+
+**Response** — `204 No Content`
+
+**Error codes**: `401` unauthenticated · `404` process not found
+
+---
+
+## GET /processes/{pid}/logs
+
+Reads buffered output that the agent has retained for this process. The agent keeps a ring buffer of recent output; use the `after` parameter to read new chunks since your last call. For live output, use the [WebSocket stream](/api/streaming) instead.
+
+```bash
+curl "https://50000-<sandbox-id>.sandboxes.example.com/processes/42/logs?after=0" \
+  -H "X-Sandbox-Token: <capability-token>"
+```
+
+**Path parameters**
+
+<ParamField path="pid" type="integer" required>
+  The process ID.
+</ParamField>
+
+**Query parameters**
+
+<ParamField query="after" type="integer">
+  Return output chunks with a sequence number greater than this value. Default
+  `0` to read from the beginning of the retained buffer.
+</ParamField>
+
+**Response** — `200 OK`
+
+<ResponseField name="chunks" type="object[]" required>
+  Log chunks in sequence order.
+
+  <Expandable title="chunk fields">
+    <ResponseField name="stream" type="string" required>
+      Either `stdout` or `stderr`.
+    </ResponseField>
+    <ResponseField name="sequence" type="integer" required>
+      Monotonically increasing sequence number. Pass the highest value you have
+      seen as `after` on the next call to read only new output.
+    </ResponseField>
+    <ResponseField name="data" type="string" required>
+      The output text.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="next_sequence" type="integer" required>
+  The next sequence number. Pass as `after` on the next call.
+</ResponseField>
+
+<ResponseField name="running" type="boolean" required>
+  True if the process is still running at the time of this response.
+</ResponseField>
+
+<ResponseField name="exit_code" type="integer">
+  Exit code, present when `running` is false.
+</ResponseField>
+
+<ResponseField name="truncated_before" type="integer">
+  The lowest sequence number currently retained. If this is greater than your
+  last `after` value, some output has been evicted from the ring buffer.
+</ResponseField>
+
+**Error codes**: `401` unauthenticated · `404` process not found

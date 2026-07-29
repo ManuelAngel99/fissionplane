@@ -1,0 +1,121 @@
+{
+  "projectType": "infrastructure",
+  "projectName": "FissionPlane",
+  "projectDescription": "A self-hosted, open-source compute platform that runs AI agent sandboxes and serverless functions in isolated Firecracker microVMs on your own Kubernetes cluster.",
+  "theme": "aspen",
+  "primaryColor": "#837c7c",
+  "lightColor": "#171717",
+  "darkColor": "#bdbaba",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/sandboxes",
+              "concepts/templates",
+              "concepts/functions",
+              "concepts/architecture",
+              "concepts/security"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/run-commands",
+              "guides/filesystem",
+              "guides/ports",
+              "guides/pause-resume",
+              "guides/build-templates"
+            ]
+          },
+          {
+            "group": "SDKs",
+            "pages": [
+              "sdks/typescript",
+              "sdks/python",
+              "sdks/rust"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "Control Plane",
+            "pages": [
+              "api/sandboxes",
+              "api/templates",
+              "api/tokens"
+            ]
+          },
+          {
+            "group": "Data Plane",
+            "pages": [
+              "api/commands",
+              "api/files",
+              "api/streaming"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Firecracker microVM isolation — each sandbox has its own kernel, filesystem, and network namespace",
+    "TypeScript, Python, and Rust SDKs with a shared OpenAPI contract",
+    "Pause and resume sandboxes to object storage with full state intact",
+    "Serverless functions that start from warm snapshots and scale to zero",
+    "Immutable templates built from any OCI image with declarative build steps",
+    "Expose guest ports as private or public HTTPS URLs with capability-token gating",
+    "One Helm chart deployment on any Kubernetes cluster (EKS, GKE, AKS, k3s, bare metal)",
+    "Resilient data path — running sandboxes survive a full control-plane outage",
+    "Fully self-hosted — no data leaves the operator's infrastructure",
+    "Signed, attenuable capability tokens for scoped sandbox access"
+  ],
+  "publicApiSurface": [
+    "POST /v1/sandboxes — create a sandbox",
+    "GET /v1/sandboxes — list sandboxes",
+    "GET /v1/sandboxes/{id} — get a sandbox",
+    "DELETE /v1/sandboxes/{id} — delete a sandbox",
+    "POST /v1/sandboxes/{id}/pause — pause to object storage",
+    "POST /v1/sandboxes/{id}/resume — resume from snapshot",
+    "POST /v1/sandboxes/{id}/extend — extend sandbox deadline",
+    "POST /v1/sandboxes/{id}/token — mint a capability token",
+    "GET|POST|DELETE /v1/sandboxes/{id}/ports — manage port exposure",
+    "GET|POST|DELETE /v1/templates — manage templates",
+    "POST /v1/templates/builds — start async template build",
+    "GET /v1/templates/builds/{id} — get build status",
+    "GET /v1/templates/builds/{id}/logs — stream build logs",
+    "POST /commands — run a command to completion (data plane)",
+    "POST /processes — start a background process (data plane)",
+    "GET|DELETE /processes/{pid} — manage a process (data plane)",
+    "GET /processes/{pid}/stream — stream process I/O via WebSocket",
+    "GET|POST /files — list or stat files (data plane)",
+    "POST /files/upload, GET /files/download — transfer files (data plane)",
+    "GET /files/watch — inotify file-system events via WebSocket",
+    "FissionPlane SDK: client.sandboxes.create/get/list/iterate/pause/resume/delete/extendDeadline/mintToken",
+    "FissionPlane SDK: sandbox.commands.run/start/listProcesses/kill",
+    "FissionPlane SDK: sandbox.files.list/stat/read/write/makeDir/move/remove/watch",
+    "FissionPlane SDK: sandbox.ports.expose/list/unexpose",
+    "FissionPlane SDK: client.templates.build/get/list/delete/getBuild/getBuildLogs"
+  ]
+}
